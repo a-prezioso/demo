@@ -66,13 +66,31 @@ const DashboardPostazioni: React.FC<{
   const [confirming, setConfirming] = React.useState(false);
   const [confirmError, setConfirmError] = React.useState<string | null>(null);
 
-  // Reset selection when data refreshes to avoid stale selection
+  // Optimistic override of station statuses after successful booking (clears on next data refresh)
+  const [overrides, setOverrides] = React.useState<Record<string, StationStatus>>({});
+  // Toast message for non-invasive feedback
+  const [toast, setToast] = React.useState<string | null>(null);
+  const toastTimerRef = React.useRef<number | null>(null);
+
+  const clearToast = React.useCallback(() => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToast(null);
+  }, []);
+
+  // Reset selection and overrides when data refreshes to avoid stale selection
   React.useEffect(() => {
     setSelected(null);
     setShowConfirm(false);
     setConfirming(false);
     setConfirmError(null);
+    // Clear optimistic overrides when new data arrives
+    if (Object.keys(overrides).length > 0) setOverrides({});
   }, [stations]);
+
+  React.useEffect(() => () => clearToast(), [clearToast]);
 
   const currentDate = bookingDate ?? new Date();
 
@@ -137,34 +155,47 @@ const DashboardPostazioni: React.FC<{
         { deskId: preview.idPostazione, date: dateKey, userId: user.id },
         { token: accessToken, preferApi: true }
       );
+
+      // Optimistic update: mark selected desk as OCCUPIED immediately
+      setOverrides(prev => ({ ...prev, [preview.idPostazione]: 'OCCUPIED' }));
+
+      // User feedback: toast message
+      setToast('Prenotazione confermata');
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = window.setTimeout(() => setToast(null), 3000);
+
       if (selected) handlePrenota(selected);
       setShowConfirm(false);
-      // Optionally trigger a reload to update map status
+      // Trigger a reload to reconcile with server state
       void reload();
     } catch (e: any) {
-      // Map known errors
-      if (e && typeof e === 'object' && 'status' in e) {
+      // Map known errors (status and backend code)
+      let mapped = 'Si è verificato un errore durante la prenotazione. Riprova.';
+      if (e && typeof e === 'object') {
         const status = (e as any).status;
-        if (status === 409) {
-          setConfirmError('La postazione è stata prenotata da un altro utente. Scegli un’altra postazione.');
+        const body = (e as any).body || {};
+        const code = body?.code;
+        if (code === 'COWORKING_CLOSED') {
+          mapped = 'Non è possibile prenotare in questa data: il coworking è chiuso.';
+        } else if (status === 409) {
+          mapped = 'La postazione è stata prenotata da un altro utente. Scegli un’altra postazione.';
         } else if (status === 422) {
-          setConfirmError('La data selezionata non è valida.');
+          mapped = 'La data selezionata non è valida.';
         } else if (status === 401 || status === 403) {
-          setConfirmError('Sessione scaduta o non autorizzata. Accedi nuovamente.');
-        } else {
-          setConfirmError('Si è verificato un errore durante la prenotazione. Riprova.');
+          mapped = 'Sessione scaduta o non autorizzata. Accedi nuovamente.';
         }
-      } else {
-        setConfirmError('Si è verificato un errore durante la prenotazione. Riprova.');
       }
+      setConfirmError(mapped);
     } finally {
       setConfirming(false);
     }
   };
 
   const GridCell: React.FC<{ item: Station; index: number }> = ({ item, index }) => {
-    const style = statusStyles[item.status];
-    const isSelectable = item.status === 'FREE';
+    // Apply optimistic override if present
+    const effectiveStatus = overrides[item.id] || item.status;
+    const style = statusStyles[effectiveStatus];
+    const isSelectable = effectiveStatus === 'FREE';
     const isSelected = selected?.id === item.id;
 
     const base: React.CSSProperties = {
@@ -198,8 +229,8 @@ const DashboardPostazioni: React.FC<{
         type="button"
         onClick={() => isSelectable && handleSelect(item)}
         onKeyDown={handleKey}
-        aria-label={`${item.name} — ${STATUS_LABEL[item.status]}`}
-        title={`${item.name} — ${STATUS_LABEL[item.status]}`}
+        aria-label={`${item.name} — ${STATUS_LABEL[effectiveStatus]}`}
+        title={`${item.name} — ${STATUS_LABEL[effectiveStatus]}`}
         style={base}
         disabled={!isSelectable}
       >
@@ -207,7 +238,7 @@ const DashboardPostazioni: React.FC<{
         <span aria-hidden style={{ fontSize: 18, marginRight: 8 }}>{style.icon}</span>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
           <strong style={{ fontSize: 14 }}>{item.name}</strong>
-          <span style={{ fontSize: 12, opacity: 0.95 }}>{STATUS_LABEL[item.status]}</span>
+          <span style={{ fontSize: 12, opacity: 0.95 }}>{STATUS_LABEL[effectiveStatus]}</span>
         </div>
       </button>
     );
@@ -216,6 +247,12 @@ const DashboardPostazioni: React.FC<{
   return (
     <div style={{ width: '100%', margin: '0 auto', padding: '1rem', maxWidth: 920 }}>
       <h2 style={{ marginBottom: '0.75rem' }}>Mappa postazioni</h2>
+
+      {toast ? (
+        <div role="status" aria-live="polite" style={{ position: 'fixed', right: 16, top: 16, background: '#065f46', color: '#ffffff', padding: '0.5rem 0.75rem', borderRadius: 8, boxShadow: '0 6px 16px rgba(0,0,0,0.25)', zIndex: 50 }}>
+          {toast}
+        </div>
+      ) : null}
 
       {loading && (
         <div role="status" aria-live="polite" style={{ margin: '0.5rem 0' }}>
