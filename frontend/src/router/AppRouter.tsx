@@ -26,7 +26,8 @@ const LoginPage: React.FC = () => {
       tokens: { accessToken: 'mock-access', refreshToken: 'mock-refresh' },
       user: { id: '1', email: 'mock@example.com' },
     });
-    navigate(from, { replace: true });
+    // Preserve current query (e.g., date) on redirect
+    navigate(from + window.location.search, { replace: true });
   };
 
   return (
@@ -54,7 +55,7 @@ const SignupPage: React.FC = () => {
       tokens: { accessToken: 'mock-access', refreshToken: 'mock-refresh' },
       user: { id: '2', email: 'new@example.com' },
     });
-    navigate(redirectTo, { replace: true });
+    navigate(redirectTo + window.location.search, { replace: true });
   };
 
   return (
@@ -102,7 +103,7 @@ const AppRoutes: React.FC = () => (
     <Route path="/signup" element={<SignupPage />} />
 
     {/* Protected routes wrapper */}
-    <Route element={<ProtectedRoute />}>
+    <Route element={<ProtectedRoute />}> 
       {/* Layout con bottom navigation persistente */}
       <Route element={<ProtectedLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />

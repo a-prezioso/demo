@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useStationsPolling, Station } from '../hooks/useStationsPolling';
 import ConfirmBookingModal from '../components/ConfirmBookingModal';
 import { createDeskBooking } from '../services/bookingService';
+import { useSelectedDate } from '../context/SelectedDateContext';
 
 // DashboardPostazioni: mappa interattiva 12 postazioni (mobile-first)
 // - Griglia 3x4 su mobile, 4x3 su viewport >= 768px
@@ -57,6 +58,7 @@ const DashboardPostazioni: React.FC<{
 }> = ({ onPrenota, bookingDate, onDeskSelected, onBookingConfirm }) => {
   const { tokens, user } = useAuth();
   const accessToken = tokens?.accessToken;
+  const { date: selectedDate, dateKey, setDate } = useSelectedDate();
 
   // Polling hook: default every 30s; can be tuned via env or props in the future
   const { stations, loading, error, reload } = useStationsPolling({ token: accessToken, intervalMs: 30000, debounceMs: 300 });
@@ -92,7 +94,7 @@ const DashboardPostazioni: React.FC<{
     return `${y}-${pad(m)}-${pad(day)}`;
   }
 
-  const currentDate = bookingDate ?? new Date();
+  const currentDate = bookingDate ?? selectedDate;
   const currentDateKey = React.useMemo(() => toDateKey(currentDate), [currentDate]);
 
   // Reset selection when data refreshes to avoid stale selection
@@ -298,19 +300,45 @@ const DashboardPostazioni: React.FC<{
   // Derived selected effective status for the bottom panel
   const selectedEffectiveStatus: StationStatus | null = selected ? getEffectiveStatus(selected.id, selected.status) : null;
 
+  // Simple date control inline to allow changing date context from dashboard
+  const DateControl: React.FC = () => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = e.target.value; // YYYY-MM-DD
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) {
+        setDate(d);
+      }
+    };
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <label htmlFor="ctx-date" style={{ fontSize: 12, color: '#374151' }}>Data:</label>
+        <input
+          id="ctx-date"
+          type="date"
+          value={dateKey}
+          onChange={handleChange}
+          style={{ padding: '0.25rem 0.5rem', borderRadius: 6, border: '1px solid #d1d5db' }}
+        />
+      </div>
+    );
+  };
+
   return (
     <div style={{ width: '100%', margin: '0 auto', padding: '1rem', maxWidth: 920 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
         <h2 style={{ marginBottom: '0.75rem' }}>Mappa postazioni</h2>
-        <button
-          type="button"
-          onClick={handleManualRefresh}
-          aria-label="Aggiorna stato postazioni"
-          title="Aggiorna stato postazioni"
-          style={{ background: '#111827', color: '#fff', border: 0, borderRadius: 8, padding: '0.35rem 0.6rem' }}
-        >
-          Aggiorna
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <DateControl />
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            aria-label="Aggiorna stato postazioni"
+            title="Aggiorna stato postazioni"
+            style={{ background: '#111827', color: '#fff', border: 0, borderRadius: 8, padding: '0.35rem 0.6rem' }}
+          >
+            Aggiorna
+          </button>
+        </div>
       </div>
 
       {toast ? (

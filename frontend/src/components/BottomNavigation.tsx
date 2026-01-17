@@ -71,6 +71,7 @@ const srOnly: React.CSSProperties = {
 const BottomNavigation: React.FC<BottomNavigationProps> = ({ style, className }) => {
   const location = useLocation();
   const current = location.pathname;
+  const search = location.search;
 
   const items = [
     { to: '/dashboard', label: 'Mappa', icon: '🗺️' },
@@ -85,7 +86,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ style, className })
           return (
             <li key={item.to} style={{ listStyle: 'none' }}>
               <NavLink
-                to={item.to}
+                to={{ pathname: item.to, search }}
                 style={{ ...itemBase, ...(isActive ? activeStyle : inactiveStyle) }}
                 aria-label={item.label}
               >

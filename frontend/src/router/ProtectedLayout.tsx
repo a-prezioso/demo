@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
+import { SelectedDateProvider } from '../context/SelectedDateContext';
 
 // ProtectedLayout: wraps protected pages with persistent bottom navigation
 // The bottom nav is fixed; we add bottom padding to avoid overlap with page content.
@@ -14,8 +15,10 @@ const containerStyle: React.CSSProperties = {
 const ProtectedLayout: React.FC = () => {
   return (
     <div style={containerStyle}>
-      <Outlet />
-      <BottomNavigation />
+      <SelectedDateProvider>
+        <Outlet />
+        <BottomNavigation />
+      </SelectedDateProvider>
     </div>
   );
 };
