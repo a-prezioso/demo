@@ -1,23 +1,28 @@
-Frontend Auth Integration Notes
+Frontend Docs
 
-- This frontend includes a minimal auth integration layer:
-  - apiConfig.ts to resolve API base URL and flags.
-  - httpClient.ts to perform JSON requests and attach Authorization header when auth=true.
-  - tokenStorage.ts for storing access and refresh tokens when httpOnly cookies are not yet configured. This is a temporary solution and has XSS trade-offs. Prefer server-set httpOnly cookies for refresh tokens.
-  - authService.ts with login, signup, and logout functions that persist tokens.
-  - AuthContext.tsx to expose auth state and actions via React Context and a useAuth hook.
-  - authInterceptor.ts to retry a request after attempting refresh on 401.
+This repository contains the frontend application and a set of technical notes that evolve with features. Below the main documentation areas and quick links.
 
-Usage:
-- Wrap your app with <AuthProvider>.
-- Call useAuth() in components to access isAuthenticated, user, login, signup, logout.
-- Use httpRequest(path, { auth: true, method: 'GET' }) for protected endpoints.
+Auth Integration
+- See: features/auth/ (AuthContext, tokenStorage, authService) and app/http/* (httpClient, authInterceptor).
+- Detailed document: this file (section below) and backend docs for server behavior.
 
-Configuration:
-- Set VITE_API_BASE_URL or REACT_APP_API_BASE_URL to point to your backend, default is same-origin /api.
-- Set VITE_AUTH_REFRESH_HTTP_ONLY=true to rely on httpOnly cookies for refresh.
-- Set VITE_TOKEN_STORAGE=local|session to choose storage.
+Navigation, routing and date context
+- New doc covering bottom navigation, route schema between dashboard map and "Le mie prenotazioni", and shared selected-date state:
+  - docs/navigation-routing-bottomnav.md
 
+Booking and calendar
+- DatePicker, disabled days and calendar API integration:
+  - features/booking/components/DatePicker.tsx
+  - features/booking/utils/dateUtils.ts
+  - features/calendar/calendarApi.ts
+- Dashboard flow (map, confirmation modal) and optimistic update overlay:
+  - features/dashboard/pages/DashboardPage.tsx
+  - features/dashboard/components/ConfirmBookingModal.tsx
+
+How to get started
+- Wrap your app with <AuthProvider> to enable protected routes.
+- Use httpRequest(path, { auth: true }) for endpoints that require Authorization.
+- For calendar/booking flows, consult the files listed above and the bottom navigation doc to keep URL/date context in sync.
 
 Authentication architecture (frontend)
 
@@ -66,7 +71,7 @@ Basic logical sequence (simplified):
 - User -> UI/LoginForm: submit email/password
 - UI -> authService.login/signup: POST /auth/(login|signup)
 - httpClient -> Backend: send credentials
-- Backend -> httpClient: { accessToken, refreshToken? } (and sets httpOnly cookie if configured)
+- Backend -> httpClient: {accessToken, refreshToken?} (and sets httpOnly cookie if configured)
 - authService -> tokenStorage: save accessToken (and refreshToken when cookie is not used)
 - AuthContext: updates user state (if user returned) and isAuthenticated becomes true
 
