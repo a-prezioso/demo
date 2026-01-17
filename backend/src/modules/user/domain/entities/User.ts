@@ -13,4 +13,10 @@ export interface User {
   verificationExpiresAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+
+  // Profile fields
+  firstName?: string | null;
+  lastName?: string | null;
+  avatarUrl?: string | null;
+  avatarId?: string | null;
 }
