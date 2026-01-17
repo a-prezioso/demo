@@ -39,14 +39,14 @@ export const DashboardPage: React.FC = () => {
     setConfirmOpen(false);
   };
 
-  const handleConfirm = async ({ stationId, dateIso }: { stationId: string; dateIso: string }) => {
+  const handleConfirmPreview = async (payload: { stationId: string; stationName?: string | null; date: Date; dateIso: string }) => {
     // TODO: integrate real API call: POST /bookings
     await new Promise((r) => setTimeout(r, 500));
     // Close modal and keep selection for details, or clear selection based on UX decision.
     setConfirmOpen(false);
     // Optionally show a feedback (toast). Placeholder: console.log
     // eslint-disable-next-line no-console
-    console.log('Prenotazione confermata', { stationId, dateIso });
+    console.log('Prenotazione confermata', payload);
   };
 
   return (
@@ -83,10 +83,9 @@ export const DashboardPage: React.FC = () => {
       {/* Confirmation modal */}
       <ConfirmBookingModal
         open={confirmOpen}
-        stationId={selectedId || ''}
-        stationName={selected?.name}
+        preview={{ stationId: selectedId || '', stationName: selected?.name ?? null, date: new Date() }}
         onCancel={handleCancelConfirm}
-        onConfirm={handleConfirm}
+        onConfirmPreview={handleConfirmPreview}
       />
     </section>
   );
