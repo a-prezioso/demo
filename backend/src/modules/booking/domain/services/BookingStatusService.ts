@@ -1,6 +1,6 @@
 // BookingStatusService - central logic to compute booking state
 // Rules:
-// - CANCELLATA: if cancelledAt is present (truthy)
+// - CANCELLATA* : if cancelledAt is present (truthy). If cancellationSource provided → map to CANCELLATA_DA_UTENTE / CANCELLATA_DA_ADMIN, else CANCELLATA
 // - PASSATA: if not cancelled and booking end (date-only) is before "today" in target TZ
 // - ATTIVA: otherwise (today or future and not cancelled)
 //
@@ -9,11 +9,15 @@
 
 import { BookingState } from '../entities/Booking';
 
+export type CancellationSource = 'USER' | 'ADMIN' | 'SYSTEM' | null | undefined;
+
 export type ComputeStatusInput = {
   // Booking date (date-only). Accepts YYYY-MM-DD string or Date.
   date: string | Date;
   // Cancellation timestamp (any truthy value means cancelled). Accepts ISO string or Date.
   cancelledAt?: string | Date | null;
+  // Optional: who cancelled (audit)
+  cancellationSource?: CancellationSource;
   // Optional override of current time (useful for tests)
   now?: Date;
   // Target timezone for today calculation
@@ -70,7 +74,12 @@ export class BookingStatusService {
     const dateKey = toDateKey(input.date);
 
     // Cancelled wins over anything else
-    if (input.cancelledAt) return 'CANCELLATA';
+    if (input.cancelledAt) {
+      const src = (input.cancellationSource || '').toString().toUpperCase();
+      if (src === 'USER') return 'CANCELLATA_DA_UTENTE' as BookingState;
+      if (src === 'ADMIN') return 'CANCELLATA_DA_ADMIN' as BookingState;
+      return 'CANCELLATA';
+    }
 
     const todayKey = getTodayKeyInTz(tz, input.now);
     // If booking date is before today => PASSATA

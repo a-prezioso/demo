@@ -27,6 +27,16 @@ enum BookingState {
   PASSATA
   ATTIVA
   CANCELLATA
+  // Estensioni per audit: distinguere chi ha cancellato
+  CANCELLATA_DA_UTENTE
+  CANCELLATA_DA_ADMIN
+}
+
+// Origine della cancellazione (audit)
+enum CancellationSource {
+  USER
+  ADMIN
+  SYSTEM
 }
 
 model User {
@@ -67,13 +77,23 @@ model Booking {
   endAt       DateTime?    @map("end_at") @db.Timestamptz(6)
   status      BookingState @map("stato") @default(ATTIVA)
   cancelledAt DateTime?    @map("cancelled_at") @db.Timestamptz(6)
+  // Audit: chi ha effettuato la cancellazione e dettagli opzionali
+  cancelledByUserId String?            @map("cancelled_by_user_id") @db.Uuid
+  cancelledBy       User?              @relation("BookingCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  cancellationSource CancellationSource? @map("cancellation_source")
+  cancellationReason String?           @map("cancellation_reason") @db.VarChar(255)
+
   createdAt   DateTime     @map("created_at") @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime     @map("updated_at") @updatedAt @db.Timestamptz(6)
 
   @@map("bookings")
+  // Nota: l'unico vincolo reale a DB è parziale (esclude cancellate). Prisma non supporta partial unique: mantenere coerenza lato migrazioni SQL.
   @@unique([deskId, date])
   @@index([userId, date])
   @@index([userId, status, date])
+  @@index([cancelledAt])
+  @@index([cancellationSource])
+  @@index([userId, cancelledAt])
 }
 
 // Refresh tokens/session tracking for JWT auth
