@@ -4,6 +4,7 @@ import ProtectedRoute from './ProtectedRoute';
 import { useAuth, AuthProvider } from '../context/AuthContext';
 import ProfilePage from '../pages/ProfilePage';
 import DashboardPostazioni from '../pages/DashboardPostazioni';
+import BookingPage from '../pages/BookingPage';
 
 // Placeholder pages: in a real app, replace with actual components
 const LoginPage: React.FC = () => {
@@ -73,6 +74,7 @@ const DashboardPage: React.FC = () => {
         </div>
         <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <Link to="/dashboard">Mappa</Link>
+          <Link to="/booking">Prenota</Link>
           <Link to="/timesheet">Timesheet</Link>
           <Link to="/projects">Projects</Link>
           <Link to="/profile">Profile</Link>
@@ -100,6 +102,7 @@ const AppRoutes: React.FC = () => (
     {/* Protected routes wrapper */}
     <Route element={<ProtectedRoute />}>
       <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/booking" element={<BookingPage />} />
       <Route path="/timesheet" element={<TimesheetPage />} />
       <Route path="/projects" element={<ProjectsPage />} />
       <Route path="/profile" element={<ProfilePage />} />
