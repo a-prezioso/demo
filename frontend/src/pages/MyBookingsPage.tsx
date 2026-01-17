@@ -1,10 +1,11 @@
 import React from 'react';
 import { useSelectedDate } from '../context/SelectedDateContext';
 import { useAuth } from '../context/AuthContext';
-import { fetchMyBookings, BookingItem, FetchMyBookingsResponse } from '../services/myBookingsService';
+import { fetchMyBookings, BookingItem, FetchMyBookingsResponse, StatusFilter } from '../services/myBookingsService';
 import BookingStatusBadge from '../components/BookingStatusBadge';
 import ConfirmCancelModal from '../components/ConfirmCancelModal';
 import { cancelBooking, canCancelBy24h } from '../services/bookingCancellationService';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 // "Le mie prenotazioni" — shows the authenticated user's bookings
 // Requirements:
@@ -78,6 +79,44 @@ const btnDangerStyle: React.CSSProperties = {
   ...btnStyle,
   background: '#DC2626',
   borderColor: '#B91C1C',
+};
+
+const toolbarStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 8,
+  flexWrap: 'wrap',
+  margin: '8px 0',
+};
+
+const filterGroupStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  flexWrap: 'wrap',
+};
+
+const pillBase: React.CSSProperties = {
+  ...btnSecondaryStyle,
+  borderRadius: 999,
+  padding: '6px 10px',
+  fontSize: 12,
+  borderColor: '#d1d5db',
+};
+
+const pillActive: React.CSSProperties = {
+  ...pillBase,
+  background: '#2563EB',
+  color: '#ffffff',
+  borderColor: '#1D4ED8',
+};
+
+const paginatorStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  flexWrap: 'wrap',
 };
 
 function formatDateIT(dateKey: string): string {
@@ -160,51 +199,136 @@ function HeaderRow() {
   );
 }
 
-function useBookingsSection(scope: 'future' | 'past') {
+function useBookingsSection(scope: 'future' | 'past', status: StatusFilter, pageSize: number) {
   const { tokens, user } = useAuth();
   const [items, setItems] = React.useState<BookingItem[]>([]);
-  const [cursor, setCursor] = React.useState<string | null>(null);
+  const [cursor, setCursor] = React.useState<string | null>(null); // next cursor for loadMore
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [initialized, setInitialized] = React.useState(false);
 
-  const load = React.useCallback(async (reset = false) => {
+  // Pagination state (keyset-based with cursor stack)
+  const [page, setPage] = React.useState(1);
+  const [cursorStack, setCursorStack] = React.useState<(string | null)[]>([null]); // index p-1 -> start cursor for page p
+  const [hasNext, setHasNext] = React.useState(false);
+
+  const commonOpts = React.useMemo(() => ({ token: tokens?.accessToken, scope as const, userId: user?.id }), [tokens?.accessToken, scope, user?.id]);
+
+  const fetchPage = React.useCallback(async (startCursor: string | null) => {
+    const res: FetchMyBookingsResponse = await fetchMyBookings({ ...commonOpts, limit: pageSize, cursor: startCursor, status });
+    return res;
+  }, [commonOpts, pageSize, status]);
+
+  const ensureCursorForPage = React.useCallback(async (targetPage: number) => {
+    // Ensure we have starting cursor for targetPage (index targetPage-1)
+    if (targetPage <= cursorStack.length) return cursorStack[targetPage - 1] ?? null;
+    // Iteratively fetch pages to build cursor stack
+    let cur = cursorStack[cursorStack.length - 1] ?? null;
+    let stack = [...cursorStack];
+    while (stack.length < targetPage) {
+      const r = await fetchPage(cur);
+      const next = r.nextCursor ?? null;
+      stack.push(next); // start of next page
+      cur = next;
+      if (!cur) break;
+    }
+    setCursorStack(stack);
+    return stack[targetPage - 1] ?? null;
+  }, [cursorStack, fetchPage]);
+
+  const loadPage = React.useCallback(async (targetPage: number) => {
     if (loading) return;
     setLoading(true);
     setError(null);
     try {
-      const res: FetchMyBookingsResponse = await fetchMyBookings({
-        token: tokens?.accessToken,
-        limit: 20,
-        cursor: reset ? null : cursor,
-        scope,
-        userId: user?.id,
-      });
-      if (reset) setItems(res.items);
-      else setItems(prev => [...prev, ...res.items]);
-      setCursor(res.nextCursor ?? null);
+      const start = await ensureCursorForPage(targetPage);
+      if (start === undefined) {
+        setLoading(false);
+        return;
+      }
+      const r = await fetchPage(start ?? null);
+      setItems(r.items);
+      setCursor(r.nextCursor ?? null);
+      setHasNext(!!r.nextCursor);
+      setPage(targetPage);
       setInitialized(true);
+      // Ensure cursor for next page is stored
+      setCursorStack(prev => {
+        const copy = [...prev];
+        if (copy.length < targetPage + 1) {
+          // fill up to targetPage
+          while (copy.length < targetPage) copy.push(null);
+          copy.push(r.nextCursor ?? null);
+        } else {
+          copy[targetPage] = r.nextCursor ?? null;
+        }
+        return copy;
+      });
     } catch (e: any) {
       setError(e?.message || 'Errore durante il caricamento');
     } finally {
       setLoading(false);
     }
-  }, [tokens?.accessToken, user?.id, cursor, scope, loading]);
+  }, [ensureCursorForPage, fetchPage, loading]);
 
+  const resetAndLoadFirst = React.useCallback(async () => {
+    setItems([]);
+    setCursor(null);
+    setPage(1);
+    setCursorStack([null]);
+    setHasNext(false);
+    await loadPage(1);
+  }, [loadPage]);
+
+  // Initial load and re-load when scope/status/pageSize changes
   React.useEffect(() => {
-    // Initial load
-    load(true);
+    resetAndLoadFirst();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope]);
+  }, [scope, status, pageSize]);
 
-  const hasMore = !!cursor;
+  const hasMore = !!cursor; // for legacy "Carica altre" button
 
   // Optimistic update on cancel success
   const onCancelled = React.useCallback((bookingId: string) => {
     setItems(prev => prev.filter(it => it.id !== bookingId));
   }, []);
 
-  return { items, hasMore, loadMore: () => load(false), reload: () => load(true), loading, error, initialized, onCancelled };
+  return {
+    items,
+    hasMore,
+    loadMore: () => {
+      if (loading) return;
+      setLoading(true);
+      setError(null);
+      fetchMyBookings({ ...commonOpts, limit: pageSize, cursor, status })
+        .then(res => {
+          setItems(prev => [...prev, ...res.items]);
+          setCursor(res.nextCursor ?? null);
+          setHasNext(!!res.nextCursor);
+          setInitialized(true);
+        })
+        .catch((e: any) => setError(e?.message || 'Errore durante il caricamento'))
+        .finally(() => setLoading(false));
+    },
+    reload: resetAndLoadFirst,
+    loading,
+    error,
+    initialized,
+    onCancelled,
+    // Pagination API
+    page,
+    hasPrev: page > 1,
+    hasNext,
+    goPrev: () => {
+      if (page > 1) void loadPage(page - 1);
+    },
+    goNext: () => {
+      if (hasNext) void loadPage(page + 1);
+    },
+    goToPage: (p: number) => {
+      if (p >= 1) void loadPage(p);
+    },
+  };
 }
 
 const srOnly: React.CSSProperties = {
@@ -219,13 +343,99 @@ const srOnly: React.CSSProperties = {
   border: 0,
 };
 
+function StatusFilterBar({ value, onChange }: { value: StatusFilter; onChange: (v: StatusFilter) => void }) {
+  const makeBtn = (val: StatusFilter, label: string) => (
+    <button
+      key={val}
+      style={value === val ? pillActive : pillBase}
+      onClick={() => onChange(val)}
+      aria-pressed={value === val}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div style={filterGroupStyle} role="tablist" aria-label="Filtro stato prenotazioni">
+      {makeBtn('ALL', 'Tutte')}
+      {makeBtn('ATTIVA', 'Attive')}
+      {makeBtn('PASSATA', 'Passate')}
+      {makeBtn('CANCELLATA', 'Cancellate')}
+    </div>
+  );
+}
+
+function PageSizeSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ fontSize: 12, color: '#4B5563' }}>Righe per pagina</span>
+      <select
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+      >
+        <option value={10}>10</option>
+        <option value={20}>20</option>
+        <option value={50}>50</option>
+      </select>
+    </label>
+  );
+}
+
+function Paginator({ page, hasPrev, hasNext, loading, onPrev, onNext }: { page: number; hasPrev: boolean; hasNext: boolean; loading?: boolean; onPrev: () => void; onNext: () => void }) {
+  return (
+    <div style={paginatorStyle}>
+      <button onClick={onPrev} disabled={!hasPrev || loading} style={btnSecondaryStyle}>Precedente</button>
+      <span style={{ fontSize: 12, color: '#4B5563' }}>Pagina {page}</span>
+      <button onClick={onNext} disabled={!hasNext || loading} style={btnSecondaryStyle}>Successiva</button>
+      {loading ? <span aria-live="polite" style={{ fontSize: 12, color: '#6B7280' }}>Caricamento…</span> : null}
+    </div>
+  );
+}
+
 const MyBookingsPage: React.FC = () => {
   const { date } = useSelectedDate();
   const { tokens } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const future = useBookingsSection('future');
+  // Filters & controls
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('ALL');
+  const [pageSize, setPageSize] = React.useState<number>(20);
+
   const [showPast, setShowPast] = React.useState(false);
-  const past = useBookingsSection('past');
+
+  // Read initial params from URL
+  React.useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const s = sp.get('status');
+    const ps = sp.get('pageSize');
+    const pastShown = sp.get('showPast');
+    if (s === 'ALL' || s === 'ATTIVA' || s === 'PASSATA' || s === 'CANCELLATA') setStatusFilter(s as StatusFilter);
+    if (ps) {
+      const n = Number(ps);
+      if ([10, 20, 50].includes(n)) setPageSize(n);
+    }
+    if (pastShown === '1') setShowPast(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync controls -> URL (keep other params like date)
+  React.useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    sp.set('status', statusFilter);
+    sp.set('pageSize', String(pageSize));
+    if (statusFilter === 'ALL') {
+      sp.set('showPast', showPast ? '1' : '0');
+    } else {
+      // Force show past when filtering specifically PASSATA/CANCELLATA
+      sp.delete('showPast');
+    }
+    navigate({ search: sp.toString() }, { replace: true });
+  }, [statusFilter, pageSize, showPast, location.search, navigate]);
+
+  // Sections
+  const future = useBookingsSection('future', statusFilter, pageSize);
+  const past = useBookingsSection('past', statusFilter, pageSize);
 
   const [modalOpen, setModalOpen] = React.useState(false);
   const [modalError, setModalError] = React.useState<string | null>(null);
@@ -263,77 +473,107 @@ const MyBookingsPage: React.FC = () => {
   };
 
   React.useEffect(() => {
+    if (statusFilter === 'PASSATA') {
+      setShowPast(true);
+    }
+  }, [statusFilter]);
+
+  React.useEffect(() => {
     if (showPast && !past.initialized && !past.loading) past.reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPast]);
+
+  const showFutureSection = statusFilter === 'ALL' || statusFilter === 'ATTIVA' || statusFilter === 'CANCELLATA';
+  const forceShowPast = statusFilter !== 'ALL';
+  const showPastSection = (statusFilter === 'ALL' ? showPast : true) && (statusFilter === 'ALL' || statusFilter === 'PASSATA' || statusFilter === 'CANCELLATA');
 
   return (
     <div style={{ padding: '1rem' }}>
       <h1>Le mie prenotazioni</h1>
 
-      {/* Future section */}
-      <section aria-labelledby="heading-future" style={{ marginTop: 8 }}>
-        <h2 id="heading-future" style={sectionTitleStyle}>Prossime</h2>
-        <div style={listContainerStyle} role="table" aria-label="Prossime prenotazioni">
-          <HeaderRow />
-          <div role="rowgroup">
-            {future.loading && !future.initialized ? (
-              <div style={{ padding: 12 }} role="status" aria-live="polite">Caricamento…</div>
-            ) : future.error ? (
-              <div style={{ padding: 12, color: '#B91C1C' }}>Errore: {future.error} <button onClick={future.reload} style={{ ...btnSecondaryStyle, marginLeft: 8 }}>Riprova</button></div>
-            ) : future.items.length === 0 ? (
-              <div style={{ padding: 12, color: '#6b7280' }}>Nessuna prenotazione futura trovata.</div>
-            ) : (
-              future.items.map((it) => <ItemRow key={it.id} item={it} onRequestCancel={requestCancel} />)
-            )}
-          </div>
-        </div>
-        {future.hasMore && (
-          <div style={{ marginTop: 8 }}>
-            <button onClick={future.loadMore} disabled={future.loading} style={btnStyle}>
-              {future.loading ? 'Caricamento…' : 'Carica altre'}
-            </button>
-          </div>
-        )}
-      </section>
+      {/* Global toolbar: status filter + page size */}
+      <div style={toolbarStyle}>
+        <StatusFilterBar value={statusFilter} onChange={setStatusFilter} />
+        <PageSizeSelect value={pageSize} onChange={setPageSize} />
+      </div>
 
-      {/* Past section */}
-      <section aria-labelledby="heading-past" style={{ marginTop: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <h2 id="heading-past" style={sectionTitleStyle}>Passate</h2>
-          <button
-            aria-expanded={showPast}
-            aria-controls="past-list"
-            onClick={() => setShowPast(s => !s)}
-            style={btnSecondaryStyle}
-          >
-            {showPast ? 'Nascondi' : 'Mostra'}
-          </button>
-        </div>
-        {showPast && (
-          <div id="past-list" style={{ ...listContainerStyle, marginTop: 8 }} role="table" aria-label="Prenotazioni passate">
+      {/* Future section */}
+      {showFutureSection && (
+        <section aria-labelledby="heading-future" style={{ marginTop: 8 }}>
+          <div style={toolbarStyle}>
+            <h2 id="heading-future" style={sectionTitleStyle}>Prossime</h2>
+            <Paginator page={future.page} hasPrev={future.hasPrev} hasNext={future.hasNext} loading={future.loading} onPrev={future.goPrev} onNext={future.goNext} />
+          </div>
+          <div style={listContainerStyle} role="table" aria-label="Prossime prenotazioni">
             <HeaderRow />
             <div role="rowgroup">
-              {past.loading && !past.initialized ? (
+              {future.loading && !future.initialized ? (
                 <div style={{ padding: 12 }} role="status" aria-live="polite">Caricamento…</div>
-              ) : past.error ? (
-                <div style={{ padding: 12, color: '#B91C1C' }}>Errore: {past.error} <button onClick={past.reload} style={{ ...btnSecondaryStyle, marginLeft: 8 }}>Riprova</button></div>
-              ) : past.items.length === 0 ? (
-                <div style={{ padding: 12, color: '#6b7280' }}>Nessuna prenotazione passata.</div>
+              ) : future.error ? (
+                <div style={{ padding: 12, color: '#B91C1C' }}>Errore: {future.error} <button onClick={future.reload} style={{ ...btnSecondaryStyle, marginLeft: 8 }}>Riprova</button></div>
+              ) : future.items.length === 0 ? (
+                <div style={{ padding: 12, color: '#6b7280' }}>Nessuna prenotazione futura trovata.</div>
               ) : (
-                past.items.map((it) => <ItemRow key={it.id} item={it} isPast />)
+                future.items.map((it) => <ItemRow key={it.id} item={it} onRequestCancel={requestCancel} />)
               )}
             </div>
           </div>
-        )}
-        {showPast && past.hasMore && (
-          <div style={{ marginTop: 8 }}>
-            <button onClick={past.loadMore} disabled={past.loading} style={btnStyle}>
-              {past.loading ? 'Caricamento…' : 'Carica altre'}
-            </button>
+          {/* Legacy progressive load retained for compatibility */}
+          {future.hasMore && (
+            <div style={{ marginTop: 8 }}>
+              <button onClick={future.loadMore} disabled={future.loading} style={btnStyle}>
+                {future.loading ? 'Caricamento…' : 'Carica altre'}
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Past section */}
+      {showPastSection && (
+        <section aria-labelledby="heading-past" style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <h2 id="heading-past" style={sectionTitleStyle}>Passate</h2>
+            {statusFilter === 'ALL' && (
+              <button
+                aria-expanded={showPast}
+                aria-controls="past-list"
+                onClick={() => setShowPast(s => !s)}
+                style={btnSecondaryStyle}
+              >
+                {showPast ? 'Nascondi' : 'Mostra'}
+              </button>
+            )}
+            {statusFilter !== 'ALL' && (
+              <Paginator page={past.page} hasPrev={past.hasPrev} hasNext={past.hasNext} loading={past.loading} onPrev={past.goPrev} onNext={past.goNext} />
+            )}
           </div>
-        )}
-      </section>
+          {(statusFilter !== 'ALL' || showPast) && (
+            <div id="past-list" style={{ ...listContainerStyle, marginTop: 8 }} role="table" aria-label="Prenotazioni passate">
+              <HeaderRow />
+              <div role="rowgroup">
+                {past.loading && !past.initialized ? (
+                  <div style={{ padding: 12 }} role="status" aria-live="polite">Caricamento…</div>
+                ) : past.error ? (
+                  <div style={{ padding: 12, color: '#B91C1C' }}>Errore: {past.error} <button onClick={past.reload} style={{ ...btnSecondaryStyle, marginLeft: 8 }}>Riprova</button></div>
+                ) : past.items.length === 0 ? (
+                  <div style={{ padding: 12, color: '#6b7280' }}>Nessuna prenotazione passata.</div>
+                ) : (
+                  past.items.map((it) => <ItemRow key={it.id} item={it} isPast />)
+                )}
+              </div>
+            </div>
+          )}
+          {/* Legacy progressive load retained for compatibility */}
+          {showPast && past.hasMore && statusFilter === 'ALL' && (
+            <div style={{ marginTop: 8 }}>
+              <button onClick={past.loadMore} disabled={past.loading} style={btnStyle}>
+                {past.loading ? 'Caricamento…' : 'Carica altre'}
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Confirmation Modal */}
       <ConfirmCancelModal
