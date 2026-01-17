@@ -2,6 +2,7 @@ import React from 'react';
 import { useSelectedDate } from '../context/SelectedDateContext';
 import { useAuth } from '../context/AuthContext';
 import { fetchMyBookings, BookingItem, FetchMyBookingsResponse } from '../services/myBookingsService';
+import BookingStatusBadge from '../components/BookingStatusBadge';
 
 // "Le mie prenotazioni" — shows the authenticated user's bookings
 // Requirements:
@@ -88,7 +89,17 @@ function formatTimeRange(start?: string | null, end?: string | null): string {
   return `${s}${s && e ? ' – ' : ''}${e}`;
 }
 
+function computeBadgeStatus(item: BookingItem, isPast?: boolean): string {
+  // If cancelled, always show cancelled
+  if ((item.status || '').toUpperCase() === 'CANCELLED' || (item.status as any) === 'CANCELED') return 'CANCELLATA';
+  // For past list, show PASSATA regardless of original status
+  if (isPast) return 'PASSATA';
+  // Otherwise reflect current/legacy status
+  return String(item.status || 'UNKNOWN');
+}
+
 function ItemRow({ item, isPast }: { item: BookingItem; isPast?: boolean }) {
+  const badgeStatus = computeBadgeStatus(item, isPast);
   return (
     <div role="row" style={{ ...itemRowStyleBase, ...(isPast ? pastItemStyle : null) }}>
       <div role="cell" aria-label="Data">{formatDateIT(item.date)}</div>
@@ -98,16 +109,7 @@ function ItemRow({ item, isPast }: { item: BookingItem; isPast?: boolean }) {
         {item.locationName ? <div style={metaStyle}>{item.locationName}</div> : null}
       </div>
       <div role="cell" aria-label="Stato">
-        <span style={{
-          padding: '2px 8px',
-          borderRadius: 999,
-          fontSize: 12,
-          background: item.status === 'CONFIRMED' ? '#10B981' : item.status === 'PENDING' ? '#F59E0B' : '#9CA3AF',
-          color: '#ffffff',
-          fontWeight: 600,
-        }}>
-          {item.status === 'CONFIRMED' ? 'Confermata' : item.status === 'PENDING' ? 'In attesa' : 'Annullata'}
-        </span>
+        <BookingStatusBadge status={badgeStatus} />
       </div>
     </div>
   );
