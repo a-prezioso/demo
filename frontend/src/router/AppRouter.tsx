@@ -1,8 +1,9 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 import { useAuth, AuthProvider } from '../context/AuthContext';
 import ProfilePage from '../pages/ProfilePage';
+import DashboardPostazioni from '../pages/DashboardPostazioni';
 
 // Placeholder pages: in a real app, replace with actual components
 const LoginPage: React.FC = () => {
@@ -26,7 +27,7 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div>
+    <div style={{ padding: '1rem' }}>
       <h1>Login</h1>
       <button onClick={handleMockLogin}>Login</button>
     </div>
@@ -54,7 +55,7 @@ const SignupPage: React.FC = () => {
   };
 
   return (
-    <div>
+    <div style={{ padding: '1rem' }}>
       <h1>Signup</h1>
       <button onClick={handleMockSignup}>Create account</button>
     </div>
@@ -64,21 +65,29 @@ const SignupPage: React.FC = () => {
 const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
   return (
-    <div>
-      <h1>Dashboard</h1>
-      <p>Welcome {user?.email}</p>
-      <nav style={{ display: 'flex', gap: '0.5rem' }}>
-        <a href="/timesheet">Timesheet</a> | <a href="/projects">Projects</a> | <a href="/profile">Profile</a>
-      </nav>
-      <div>
-        <button onClick={logout}>Logout</button>
-      </div>
+    <div style={{ padding: '1rem' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <div>
+          <h1 style={{ margin: 0 }}>Dashboard</h1>
+          <p style={{ margin: 0 }}>Welcome {user?.email}</p>
+        </div>
+        <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <Link to="/dashboard">Mappa</Link>
+          <Link to="/timesheet">Timesheet</Link>
+          <Link to="/projects">Projects</Link>
+          <Link to="/profile">Profile</Link>
+          <button onClick={logout} style={{ marginLeft: '0.5rem' }}>Logout</button>
+        </nav>
+      </header>
+
+      {/* Mappa delle postazioni */}
+      <DashboardPostazioni onPrenota={(s) => { /* placeholder: navigate booking */ alert(`Vai a prenotare ${s.name}`); }} />
     </div>
   );
 };
 
-const TimesheetPage: React.FC = () => <div><h1>Timesheet</h1></div>;
-const ProjectsPage: React.FC = () => <div><h1>Projects</h1></div>;
+const TimesheetPage: React.FC = () => <div style={{ padding: '1rem' }}><h1>Timesheet</h1></div>;
+const ProjectsPage: React.FC = () => <div style={{ padding: '1rem' }}><h1>Projects</h1></div>;
 
 const AppRoutes: React.FC = () => (
   <Routes>
