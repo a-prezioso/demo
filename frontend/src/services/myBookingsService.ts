@@ -2,7 +2,7 @@
 // Primary endpoint: GET /api/bookings/me?from=&to=&limit=&cursor=&order=
 // Fallback: in-memory stub generating deterministic sample data
 
-export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'PASSATA' | 'ATTIVA' | 'CANCELLATA';
 
 export type BookingItem = {
   id: string;
