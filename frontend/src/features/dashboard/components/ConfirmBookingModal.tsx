@@ -6,6 +6,8 @@ export type BookingPreview = {
   date: Date; // booking date (local)
   building?: string | null;
   floor?: string | null;
+  // Optional time slot identifier (e.g., 'AM', 'PM', '09-13')
+  timeSlot?: string | null;
 };
 
 export type ConfirmBookingModalProps = {
@@ -61,6 +63,7 @@ export const ConfirmBookingModal: React.FC<ConfirmBookingModalProps> = ({
       date,
       building: buildingProp ?? null,
       floor: floorProp ?? null,
+      timeSlot: null,
     };
   }, [preview, stationIdProp, stationNameProp, dateProp, buildingProp, floorProp]);
 
@@ -118,11 +121,12 @@ export const ConfirmBookingModal: React.FC<ConfirmBookingModalProps> = ({
 
   if (!open) return null;
 
-  const { stationId, stationName, building, floor } = effectivePreview;
+  const { stationId, stationName, building, floor, timeSlot } = effectivePreview;
   const titleId = 'confirm-booking-title';
   const descId = 'confirm-booking-desc';
 
   const handleConfirm = async () => {
+    if (submitting) return; // guard against double-click
     setError(null);
     try {
       setSubmitting(true);
@@ -132,6 +136,7 @@ export const ConfirmBookingModal: React.FC<ConfirmBookingModalProps> = ({
         await onConfirm?.({ stationId, dateIso });
       }
     } catch (e: any) {
+      // Show specific message if provided by parent
       setError(e?.message || 'Errore temporaneo, riprova');
     } finally {
       setSubmitting(false);
@@ -158,7 +163,7 @@ export const ConfirmBookingModal: React.FC<ConfirmBookingModalProps> = ({
         <h2 id={titleId} ref={titleRef} tabIndex={-1} style={{ marginTop: 0 }}>Confermi prenotazione?</h2>
         <p id={descId} style={{ marginBottom: 12 }}>
           Stai prenotando la postazione <strong>{stationId}{stationName ? ` — ${stationName}` : ''}</strong>
-          {' '}per il giorno <strong>{pretty}</strong>.
+          {' '}per il giorno <strong>{pretty}</strong>{timeSlot ? ` (fascia ${timeSlot})` : ''}.
         </p>
         {(building || floor) && (
           <p style={{ marginTop: -8, marginBottom: 12, color: '#4B5563' }}>

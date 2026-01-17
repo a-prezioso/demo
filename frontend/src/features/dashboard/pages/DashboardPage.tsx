@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import '../../../assets/styles/dashboard.css';
 import { LegendBar } from '../components/LegendBar';
 import { StationDetail } from '../components/StationDetail';
 import { StationsMap } from '../components/StationsMap';
 import { Station, StationStatus, STATION_IDS } from '../types';
 import { ConfirmBookingModal } from '../components/ConfirmBookingModal';
+import { createBooking } from '../../booking/bookingApi';
 
 function mockStations(): Station[] {
   // Simple mock: alternate statuses for visual
@@ -17,12 +18,15 @@ export const DashboardPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toISOString());
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const stations = useMemo(() => mockStations(), [lastUpdated]);
+  const [stations, setStations] = useState<Station[]>(() => mockStations());
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
-  const selected = stations.find((s) => s.id === selectedId) || null;
+  const selected = useMemo(() => stations.find((s) => s.id === selectedId) || null, [stations, selectedId]);
 
   const onRefresh = () => {
-    // Placeholder: in future call API and update lastUpdated
+    // Placeholder: in future call API and update lastUpdated and stations from server
+    setStations(mockStations());
     setLastUpdated(new Date().toISOString());
   };
 
@@ -39,14 +43,30 @@ export const DashboardPage: React.FC = () => {
     setConfirmOpen(false);
   };
 
-  const handleConfirmPreview = async (payload: { stationId: string; stationName?: string | null; date: Date; dateIso: string }) => {
-    // TODO: integrate real API call: POST /bookings
-    await new Promise((r) => setTimeout(r, 500));
-    // Close modal and keep selection for details, or clear selection based on UX decision.
-    setConfirmOpen(false);
-    // Optionally show a feedback (toast). Placeholder: console.log
-    // eslint-disable-next-line no-console
-    console.log('Prenotazione confermata', payload);
+  function showToast(message: string) {
+    setToast(message);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 3000);
+  }
+
+  const handleConfirmPreview = async (payload: { stationId: string; stationName?: string | null; date: Date; dateIso: string; timeSlot?: string | null }) => {
+    try {
+      // Call backend API to create booking
+      await createBooking({ stationId: payload.stationId, date: payload.dateIso, timeSlot: payload.timeSlot || undefined });
+      // Update UI immediately: mark station as busy for the selected date
+      setStations((prev) => prev.map((s) => (s.id === payload.stationId ? { ...s, status: 'busy', updatedAt: new Date().toISOString() } : s)));
+      setConfirmOpen(false);
+      showToast('Prenotazione confermata');
+    } catch (err: any) {
+      // Specific handling for closed day
+      const code = err?.data?.code;
+      if (code === 'COWORKING_CLOSED') {
+        throw new Error('Non è possibile prenotare in questa data: il coworking è chiuso.');
+      }
+      // Other known validations could be handled here (e.g., ALREADY_BOOKED)
+      const msg: string = err?.data?.message || err?.message || 'Errore durante la prenotazione. Riprova.';
+      throw new Error(msg);
+    }
   };
 
   return (
@@ -87,6 +107,13 @@ export const DashboardPage: React.FC = () => {
         onCancel={handleCancelConfirm}
         onConfirmPreview={handleConfirmPreview}
       />
+
+      {/* Simple toast notification */}
+      {toast && (
+        <div role="status" aria-live="polite" style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 24, background: '#065F46', color: '#fff', padding: '10px 14px', borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,0.2)', zIndex: 1100 }}>
+          {toast}
+        </div>
+      )}
     </section>
   );
 };
