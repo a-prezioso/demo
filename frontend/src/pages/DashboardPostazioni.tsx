@@ -1,20 +1,17 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useStationsPolling, Station } from '../hooks/useStationsPolling';
 
 // DashboardPostazioni: mappa interattiva 12 postazioni (mobile-first)
 // - Griglia 3x4 su mobile, 4x3 su viewport >= 768px
 // - Stati: FREE (libero), OCCUPIED (occupato), UNAVAILABLE (non disponibile)
 // - Colori accessibili e icone semplificate
 // - Selezione mostra pannello informativo e azione di prenotazione (hook)
-// - Gestione loading ed errore con retry
+// - Gestione loading ed errore con retry e polling periodico
 
 export type StationStatus = 'FREE' | 'OCCUPIED' | 'UNAVAILABLE';
 
-export type Station = {
-  id: string;
-  name: string;
-  status: StationStatus;
-};
+export type { Station };
 
 const STATUS_LABEL: Record<StationStatus, string> = {
   FREE: 'Libero',
@@ -27,18 +24,6 @@ const statusStyles: Record<StationStatus, { bg: string; fg: string; border?: str
   OCCUPIED: { bg: '#dc2626', fg: '#ffffff', border: '1px solid #b91c1c', icon: '■' }, // red
   UNAVAILABLE: { bg: '#9ca3af', fg: '#111827', border: '1px solid #6b7280', icon: '×' }, // gray
 };
-
-// Utility per creare layout fisso di 12 posizioni preservando l'ordine
-function normalizeStations(list: Station[]): Station[] {
-  const items = [...list].slice(0, 12);
-  if (items.length < 12) {
-    const remaining = 12 - items.length;
-    for (let i = 0; i < remaining; i++) {
-      items.push({ id: `placeholder-${i}`, name: `Postazione ${items.length + 1}`, status: 'UNAVAILABLE' });
-    }
-  }
-  return items;
-}
 
 const srOnly: React.CSSProperties = {
   position: 'absolute',
@@ -56,49 +41,15 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void } > = ({ 
   const { tokens } = useAuth();
   const accessToken = tokens?.accessToken;
 
-  const [stations, setStations] = React.useState<Station[]>([]);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  // Polling hook: default every 30s; can be tuned via env or props in the future
+  const { stations, loading, error, reload } = useStationsPolling({ token: accessToken, intervalMs: 30000, debounceMs: 300 });
+
   const [selected, setSelected] = React.useState<Station | null>(null);
 
-  const fetchStations = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setSelected(null);
-    try {
-      const res = await fetch('/api/stations', {
-        headers: {
-          Accept: 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-      });
-      if (!res.ok) {
-        setError(`Errore nel caricamento delle postazioni (${res.status})`);
-        setStations([]);
-        return;
-      }
-      const data = await res.json();
-      // Expecting: [{ id, name, status }]
-      const normalized: Station[] = Array.isArray(data)
-        ? data.map((d: any, idx: number) => ({
-            id: String(d.id ?? idx),
-            name: String(d.name ?? `Postazione ${idx + 1}`),
-            status: (d.status === 'FREE' || d.status === 'OCCUPIED' || d.status === 'UNAVAILABLE') ? d.status : 'UNAVAILABLE',
-          }))
-        : [];
-      const finalList = normalizeStations(normalized);
-      setStations(finalList);
-    } catch (e) {
-      setError('Impossibile recuperare le postazioni. Controlla la connessione.');
-      setStations([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [accessToken]);
-
+  // Reset selection when data refreshes to avoid stale selection
   React.useEffect(() => {
-    void fetchStations();
-  }, [fetchStations]);
+    setSelected(null);
+  }, [stations]);
 
   const handleSelect = (s: Station) => {
     setSelected(s);
@@ -177,7 +128,7 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void } > = ({ 
       {error && (
         <div style={{ background: '#fde8e8', color: '#611a15', padding: '0.75rem', borderRadius: 8, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
           <div>{error}</div>
-          <button onClick={() => void fetchStations()} style={{ background: '#111827', color: '#ffffff', border: 0, borderRadius: 6, padding: '0.4rem 0.6rem' }}>Riprova</button>
+          <button onClick={() => void reload()} style={{ background: '#111827', color: '#ffffff', border: 0, borderRadius: 6, padding: '0.4rem 0.6rem' }}>Riprova</button>
         </div>
       )}
 
