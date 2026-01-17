@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useStationsPolling, Station } from '../hooks/useStationsPolling';
 import ConfirmBookingModal from '../components/ConfirmBookingModal';
+import { createDeskBooking } from '../services/bookingService';
 
 // DashboardPostazioni: mappa interattiva 12 postazioni (mobile-first)
 // - Griglia 3x4 su mobile, 4x3 su viewport >= 768px
@@ -54,7 +55,7 @@ const DashboardPostazioni: React.FC<{
   onDeskSelected?: (desk: Station, date: Date, preview: BookingPreview) => void;
   onBookingConfirm?: (preview: BookingPreview) => void | Promise<void>;
 }> = ({ onPrenota, bookingDate, onDeskSelected, onBookingConfirm }) => {
-  const { tokens } = useAuth();
+  const { tokens, user } = useAuth();
   const accessToken = tokens?.accessToken;
 
   // Polling hook: default every 30s; can be tuned via env or props in the future
@@ -63,12 +64,14 @@ const DashboardPostazioni: React.FC<{
   const [selected, setSelected] = React.useState<Station | null>(null);
   const [showConfirm, setShowConfirm] = React.useState(false);
   const [confirming, setConfirming] = React.useState(false);
+  const [confirmError, setConfirmError] = React.useState<string | null>(null);
 
   // Reset selection when data refreshes to avoid stale selection
   React.useEffect(() => {
     setSelected(null);
     setShowConfirm(false);
     setConfirming(false);
+    setConfirmError(null);
   }, [stations]);
 
   const currentDate = bookingDate ?? new Date();
@@ -87,6 +90,7 @@ const DashboardPostazioni: React.FC<{
     if (s.status !== 'FREE') return; // only free desks trigger selection/modal
     setSelected(s);
     setShowConfirm(true);
+    setConfirmError(null);
     const preview = buildPreview(s, currentDate);
     if (onDeskSelected) onDeskSelected(s, currentDate, preview);
   };
@@ -110,14 +114,49 @@ const DashboardPostazioni: React.FC<{
     setShowConfirm(false);
   };
 
+  function toDateKey(d: Date) {
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
+    return `${y}-${pad(m)}-${pad(day)}`;
+  }
+
   const handleConfirmWithPreview = async (preview: BookingPreview) => {
     try {
+      setConfirmError(null);
       setConfirming(true);
+      // If parent provided a hook, call it first (can throw)
       if (onBookingConfirm) {
         await Promise.resolve(onBookingConfirm(preview));
       }
+      // Then attempt backend booking (or stub)
+      const dateKey = toDateKey(preview.dataPrenotazione);
+      if (!user?.id) throw new Error('Utente non autenticato');
+      await createDeskBooking(
+        { deskId: preview.idPostazione, date: dateKey, userId: user.id },
+        { token: accessToken, preferApi: true }
+      );
       if (selected) handlePrenota(selected);
       setShowConfirm(false);
+      // Optionally trigger a reload to update map status
+      void reload();
+    } catch (e: any) {
+      // Map known errors
+      if (e && typeof e === 'object' && 'status' in e) {
+        const status = (e as any).status;
+        if (status === 409) {
+          setConfirmError('La postazione è stata prenotata da un altro utente. Scegli un’altra postazione.');
+        } else if (status === 422) {
+          setConfirmError('La data selezionata non è valida.');
+        } else if (status === 401 || status === 403) {
+          setConfirmError('Sessione scaduta o non autorizzata. Accedi nuovamente.');
+        } else {
+          setConfirmError('Si è verificato un errore durante la prenotazione. Riprova.');
+        }
+      } else {
+        setConfirmError('Si è verificato un errore durante la prenotazione. Riprova.');
+      }
     } finally {
       setConfirming(false);
     }
@@ -228,7 +267,7 @@ const DashboardPostazioni: React.FC<{
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
                 type="button"
-                onClick={() => { setSelected(null); setShowConfirm(false); }}
+                onClick={() => { setSelected(null); setShowConfirm(false); setConfirmError(null); }}
                 style={{ background: '#e5e7eb', color: '#111827', border: 0, borderRadius: 6, padding: '0.5rem 0.75rem' }}
               >
                 Chiudi
@@ -269,6 +308,7 @@ const DashboardPostazioni: React.FC<{
         bookingPreview={selected ? buildPreview(selected, currentDate) : undefined}
         onConfirmWithPreview={handleConfirmWithPreview}
         isConfirming={confirming}
+        errorMessage={confirmError}
       />
     </div>
   );

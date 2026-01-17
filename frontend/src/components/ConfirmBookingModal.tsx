@@ -22,6 +22,8 @@ export type ConfirmBookingModalProps = {
   isConfirming?: boolean; // disables Confirm button and shows loading state
   confirmLabel?: string;
   cancelLabel?: string;
+  // Optional error message to display inside the modal (e.g., validation or conflict)
+  errorMessage?: string | null;
 };
 
 function formatDateIT(d: Date): string {
@@ -85,6 +87,16 @@ const spinnerStyle: React.CSSProperties = {
   animation: 'spin 1s linear infinite',
 };
 
+const errorBoxStyle: React.CSSProperties = {
+  background: '#fde8e8',
+  color: '#611a15',
+  border: '1px solid #f3b8b8',
+  borderRadius: 8,
+  padding: '0.5rem 0.75rem',
+  marginTop: '0.5rem',
+  fontSize: 13,
+};
+
 const ConfirmBookingModal: React.FC<ConfirmBookingModalProps> = ({
   open,
   stationName,
@@ -97,6 +109,7 @@ const ConfirmBookingModal: React.FC<ConfirmBookingModalProps> = ({
   isConfirming,
   confirmLabel = 'Conferma',
   cancelLabel = 'Annulla',
+  errorMessage,
 }) => {
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
   const confirmBtnRef = React.useRef<HTMLButtonElement | null>(null);
@@ -159,6 +172,11 @@ const ConfirmBookingModal: React.FC<ConfirmBookingModalProps> = ({
             {effective.edificio ? <li><strong>Edificio:</strong> {effective.edificio}</li> : null}
           </ul>
           <p style={{ fontSize: 12, color: '#6b7280' }}>Verifica le informazioni prima di confermare. Potrai modificare o annullare la prenotazione secondo le policy del coworking.</p>
+          {errorMessage ? (
+            <div role="alert" aria-live="assertive" style={errorBoxStyle}>
+              {errorMessage}
+            </div>
+          ) : null}
         </div>
         <div style={footerStyle}>
           <button
