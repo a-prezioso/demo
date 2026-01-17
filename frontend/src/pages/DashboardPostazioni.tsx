@@ -52,7 +52,7 @@ const DashboardPostazioni: React.FC<{
   bookingDate?: Date;
   // New optional callbacks for upper components
   onDeskSelected?: (desk: Station, date: Date, preview: BookingPreview) => void;
-  onBookingConfirm?: (preview: BookingPreview) => void;
+  onBookingConfirm?: (preview: BookingPreview) => void | Promise<void>;
 }> = ({ onPrenota, bookingDate, onDeskSelected, onBookingConfirm }) => {
   const { tokens } = useAuth();
   const accessToken = tokens?.accessToken;
@@ -62,11 +62,13 @@ const DashboardPostazioni: React.FC<{
 
   const [selected, setSelected] = React.useState<Station | null>(null);
   const [showConfirm, setShowConfirm] = React.useState(false);
+  const [confirming, setConfirming] = React.useState(false);
 
   // Reset selection when data refreshes to avoid stale selection
   React.useEffect(() => {
     setSelected(null);
     setShowConfirm(false);
+    setConfirming(false);
   }, [stations]);
 
   const currentDate = bookingDate ?? new Date();
@@ -106,6 +108,19 @@ const DashboardPostazioni: React.FC<{
     if (onBookingConfirm) onBookingConfirm(preview);
     handlePrenota(selected);
     setShowConfirm(false);
+  };
+
+  const handleConfirmWithPreview = async (preview: BookingPreview) => {
+    try {
+      setConfirming(true);
+      if (onBookingConfirm) {
+        await Promise.resolve(onBookingConfirm(preview));
+      }
+      if (selected) handlePrenota(selected);
+      setShowConfirm(false);
+    } finally {
+      setConfirming(false);
+    }
   };
 
   const GridCell: React.FC<{ item: Station; index: number }> = ({ item, index }) => {
@@ -251,6 +266,9 @@ const DashboardPostazioni: React.FC<{
         date={currentDate}
         onCancel={() => setShowConfirm(false)}
         onConfirm={handleConfirm}
+        bookingPreview={selected ? buildPreview(selected, currentDate) : undefined}
+        onConfirmWithPreview={handleConfirmWithPreview}
+        isConfirming={confirming}
       />
     </div>
   );
