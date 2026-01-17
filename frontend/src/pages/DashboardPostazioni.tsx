@@ -38,7 +38,22 @@ const srOnly: React.CSSProperties = {
   border: 0,
 };
 
-const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void; bookingDate?: Date } > = ({ onPrenota, bookingDate }) => {
+// Booking preview object to pass to popup/upper components
+export type BookingPreview = {
+  idPostazione: string;
+  numeroPostazione: string; // readable label/number
+  dataPrenotazione: Date;
+  piano?: string | null;
+  edificio?: string | null;
+};
+
+const DashboardPostazioni: React.FC<{
+  onPrenota?: (s: Station) => void;
+  bookingDate?: Date;
+  // New optional callbacks for upper components
+  onDeskSelected?: (desk: Station, date: Date, preview: BookingPreview) => void;
+  onBookingConfirm?: (preview: BookingPreview) => void;
+}> = ({ onPrenota, bookingDate, onDeskSelected, onBookingConfirm }) => {
   const { tokens } = useAuth();
   const accessToken = tokens?.accessToken;
 
@@ -54,13 +69,28 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void; bookingD
     setShowConfirm(false);
   }, [stations]);
 
+  const currentDate = bookingDate ?? new Date();
+
+  const buildPreview = React.useCallback((s: Station, date: Date): BookingPreview => {
+    return {
+      idPostazione: s.id,
+      numeroPostazione: s.name, // in futuro si potrà mappare ad un numero
+      dataPrenotazione: date,
+      piano: null,
+      edificio: null,
+    };
+  }, []);
+
   const handleSelect = (s: Station) => {
     if (s.status !== 'FREE') return; // only free desks trigger selection/modal
     setSelected(s);
     setShowConfirm(true);
+    const preview = buildPreview(s, currentDate);
+    if (onDeskSelected) onDeskSelected(s, currentDate, preview);
   };
 
   const handlePrenota = (s: Station) => {
+    // Backward compatibility handler
     if (onPrenota) {
       onPrenota(s);
       return;
@@ -71,13 +101,17 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void; bookingD
   };
 
   const handleConfirm = () => {
-    if (selected) handlePrenota(selected);
+    if (!selected) return;
+    const preview = buildPreview(selected, currentDate);
+    if (onBookingConfirm) onBookingConfirm(preview);
+    handlePrenota(selected);
     setShowConfirm(false);
   };
 
   const GridCell: React.FC<{ item: Station; index: number }> = ({ item, index }) => {
     const style = statusStyles[item.status];
     const isSelectable = item.status === 'FREE';
+    const isSelected = selected?.id === item.id;
 
     const base: React.CSSProperties = {
       position: 'relative',
@@ -93,7 +127,8 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void; bookingD
       textAlign: 'center',
       userSelect: 'none',
       cursor: isSelectable ? 'pointer' : 'not-allowed',
-      outline: 'none',
+      outline: isSelected ? '3px solid rgba(17,24,39,0.85)' : 'none',
+      boxShadow: isSelected ? '0 0 0 2px rgba(17,24,39,0.25) inset' : 'none',
       width: '100%',
     };
 
@@ -123,8 +158,6 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void; bookingD
       </button>
     );
   };
-
-  const currentDate = bookingDate ?? new Date();
 
   return (
     <div style={{ width: '100%', margin: '0 auto', padding: '1rem', maxWidth: 920 }}>
