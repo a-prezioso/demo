@@ -15,18 +15,48 @@ function mockStations(): Station[] {
 }
 
 export const DashboardPage: React.FC = () => {
+  // Selected station and date (today by default)
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedDate] = useState<Date>(() => new Date());
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toISOString());
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [stations, setStations] = useState<Station[]>(() => mockStations());
+
+  // Base stations loaded from server (here: mock)
+  const [baseStations, setBaseStations] = useState<Station[]>(() => mockStations());
+
+  // Local overlay to immediately reflect bookings per date without full reload
+  // Map: ISO date (YYYY-MM-DD) -> { [stationId]: StationStatus }
+  const [overridesByDate, setOverridesByDate] = useState<Record<string, Record<string, StationStatus>>>({});
+
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+
+  // Compute stations shown by applying local overrides for the selected date
+  const selectedDateIso = useMemo(() => {
+    const d = selectedDate;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, [selectedDate]);
+
+  const stations: Station[] = useMemo(() => {
+    const overrides = overridesByDate[selectedDateIso] || {};
+    const nowIso = new Date().toISOString();
+    return baseStations.map((s) => (overrides[s.id]
+      ? { ...s, status: overrides[s.id], updatedAt: nowIso }
+      : s
+    ));
+  }, [baseStations, overridesByDate, selectedDateIso]);
 
   const selected = useMemo(() => stations.find((s) => s.id === selectedId) || null, [stations, selectedId]);
 
   const onRefresh = () => {
-    // Placeholder: in future call API and update lastUpdated and stations from server
-    setStations(mockStations());
+    // Placeholder: in future call API and update lastUpdated and baseStations from server
+    const fresh = mockStations();
+    setBaseStations(fresh);
+    // Rollback local overrides on manual refresh to re-sync with server
+    setOverridesByDate({});
     setLastUpdated(new Date().toISOString());
   };
 
@@ -50,12 +80,20 @@ export const DashboardPage: React.FC = () => {
   }
 
   const handleConfirmPreview = async (payload: { stationId: string; stationName?: string | null; date: Date; dateIso: string; timeSlot?: string | null }) => {
+    // Optimistic update pattern (disabled by default). We update after success to avoid rollback complexity.
     try {
       // Call backend API to create booking
       await createBooking({ stationId: payload.stationId, date: payload.dateIso, timeSlot: payload.timeSlot || undefined });
-      // Update UI immediately: mark station as busy for the selected date
-      setStations((prev) => prev.map((s) => (s.id === payload.stationId ? { ...s, status: 'busy', updatedAt: new Date().toISOString() } : s)));
+      // Update local overlay for the specific date only
+      setOverridesByDate((prev) => ({
+        ...prev,
+        [payload.dateIso]: {
+          ...(prev[payload.dateIso] || {}),
+          [payload.stationId]: 'busy',
+        },
+      }));
       setConfirmOpen(false);
+      setLastUpdated(new Date().toISOString());
       showToast('Prenotazione confermata');
     } catch (err: any) {
       // Specific handling for closed day
@@ -103,7 +141,7 @@ export const DashboardPage: React.FC = () => {
       {/* Confirmation modal */}
       <ConfirmBookingModal
         open={confirmOpen}
-        preview={{ stationId: selectedId || '', stationName: selected?.name ?? null, date: new Date() }}
+        preview={{ stationId: selectedId || '', stationName: selected?.name ?? null, date: selectedDate }}
         onCancel={handleCancelConfirm}
         onConfirmPreview={handleConfirmPreview}
       />
