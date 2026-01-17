@@ -1,12 +1,13 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useStationsPolling, Station } from '../hooks/useStationsPolling';
+import ConfirmBookingModal from '../components/ConfirmBookingModal';
 
 // DashboardPostazioni: mappa interattiva 12 postazioni (mobile-first)
 // - Griglia 3x4 su mobile, 4x3 su viewport >= 768px
 // - Stati: FREE (libero), OCCUPIED (occupato), UNAVAILABLE (non disponibile)
 // - Colori accessibili e icone semplificate
-// - Selezione mostra pannello informativo e azione di prenotazione (hook)
+// - Selezione mostra popup di conferma prenotazione per postazioni libere
 // - Gestione loading ed errore con retry e polling periodico
 
 export type StationStatus = 'FREE' | 'OCCUPIED' | 'UNAVAILABLE';
@@ -37,7 +38,7 @@ const srOnly: React.CSSProperties = {
   border: 0,
 };
 
-const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void } > = ({ onPrenota }) => {
+const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void; bookingDate?: Date } > = ({ onPrenota, bookingDate }) => {
   const { tokens } = useAuth();
   const accessToken = tokens?.accessToken;
 
@@ -45,14 +46,18 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void } > = ({ 
   const { stations, loading, error, reload } = useStationsPolling({ token: accessToken, intervalMs: 30000, debounceMs: 300 });
 
   const [selected, setSelected] = React.useState<Station | null>(null);
+  const [showConfirm, setShowConfirm] = React.useState(false);
 
   // Reset selection when data refreshes to avoid stale selection
   React.useEffect(() => {
     setSelected(null);
+    setShowConfirm(false);
   }, [stations]);
 
   const handleSelect = (s: Station) => {
+    if (s.status !== 'FREE') return; // only free desks trigger selection/modal
     setSelected(s);
+    setShowConfirm(true);
   };
 
   const handlePrenota = (s: Station) => {
@@ -65,9 +70,14 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void } > = ({ 
     alert(`Azione prenotazione per: ${s.name}`);
   };
 
+  const handleConfirm = () => {
+    if (selected) handlePrenota(selected);
+    setShowConfirm(false);
+  };
+
   const GridCell: React.FC<{ item: Station; index: number }> = ({ item, index }) => {
     const style = statusStyles[item.status];
-    const isSelectable = item.status === 'FREE' || item.status === 'OCCUPIED';
+    const isSelectable = item.status === 'FREE';
 
     const base: React.CSSProperties = {
       position: 'relative',
@@ -113,6 +123,8 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void } > = ({ 
       </button>
     );
   };
+
+  const currentDate = bookingDate ?? new Date();
 
   return (
     <div style={{ width: '100%', margin: '0 auto', padding: '1rem', maxWidth: 920 }}>
@@ -168,14 +180,14 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void } > = ({ 
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
                 type="button"
-                onClick={() => setSelected(null)}
+                onClick={() => { setSelected(null); setShowConfirm(false); }}
                 style={{ background: '#e5e7eb', color: '#111827', border: 0, borderRadius: 6, padding: '0.5rem 0.75rem' }}
               >
                 Chiudi
               </button>
               <button
                 type="button"
-                onClick={() => handlePrenota(selected)}
+                onClick={() => selected.status === 'FREE' ? setShowConfirm(true) : undefined}
                 disabled={selected.status !== 'FREE'}
                 style={{ background: selected.status === 'FREE' ? '#111827' : '#9ca3af', color: '#ffffff', border: 0, borderRadius: 6, padding: '0.5rem 0.75rem' }}
               >
@@ -184,7 +196,7 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void } > = ({ 
             </div>
           </div>
         ) : (
-          <div style={{ fontSize: 12, color: '#6b7280' }}>Tocca una postazione per vedere i dettagli.</div>
+          <div style={{ fontSize: 12, color: '#6b7280' }}>Tocca una postazione libera per prenotare.</div>
         )}
       </div>
 
@@ -197,6 +209,16 @@ const DashboardPostazioni: React.FC<{ onPrenota?: (s: Station) => void } > = ({ 
           </div>
         ))}
       </div>
+
+      {/* Modal conferma prenotazione */}
+      <ConfirmBookingModal
+        open={!!selected && showConfirm}
+        stationName={selected?.name || ''}
+        stationId={selected?.id}
+        date={currentDate}
+        onCancel={() => setShowConfirm(false)}
+        onConfirm={handleConfirm}
+      />
     </div>
   );
 };
