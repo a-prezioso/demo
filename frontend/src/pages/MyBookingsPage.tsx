@@ -3,6 +3,8 @@ import { useSelectedDate } from '../context/SelectedDateContext';
 import { useAuth } from '../context/AuthContext';
 import { fetchMyBookings, BookingItem, FetchMyBookingsResponse } from '../services/myBookingsService';
 import BookingStatusBadge from '../components/BookingStatusBadge';
+import ConfirmCancelModal from '../components/ConfirmCancelModal';
+import { cancelBooking, canCancelBy24h } from '../services/bookingCancellationService';
 
 // "Le mie prenotazioni" — shows the authenticated user's bookings
 // Requirements:
@@ -28,7 +30,7 @@ const listContainerStyle: React.CSSProperties = {
 
 const headerRowStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'minmax(100px,120px) minmax(80px,110px) 1fr minmax(96px,120px)',
+  gridTemplateColumns: 'minmax(100px,120px) minmax(80px,110px) 1fr minmax(96px,120px) minmax(120px,140px)',
   gap: 8,
   alignItems: 'center',
   padding: '8px 12px',
@@ -36,18 +38,18 @@ const headerRowStyle: React.CSSProperties = {
   color: '#374151',
   fontSize: 12,
   fontWeight: 600,
-  minWidth: 560,
+  minWidth: 680,
 };
 
 const itemRowStyleBase: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'minmax(100px,120px) minmax(80px,110px) 1fr minmax(96px,120px)',
+  gridTemplateColumns: 'minmax(100px,120px) minmax(80px,110px) 1fr minmax(96px,120px) minmax(120px,140px)',
   gap: 8,
   alignItems: 'center',
   padding: '10px 12px',
   borderTop: '1px solid #f3f4f6',
   fontSize: 14,
-  minWidth: 560,
+  minWidth: 680,
 };
 
 const pastItemStyle: React.CSSProperties = { color: '#6b7280' }; // dimmed
@@ -72,11 +74,27 @@ const btnSecondaryStyle: React.CSSProperties = {
   color: '#111827',
 };
 
+const btnDangerStyle: React.CSSProperties = {
+  ...btnStyle,
+  background: '#DC2626',
+  borderColor: '#B91C1C',
+};
+
 function formatDateIT(dateKey: string): string {
   const [y, m, d] = dateKey.split('-').map(Number);
   const dt = new Date(y, (m || 1) - 1, d || 1);
   try {
     return dt.toLocaleDateString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  } catch {
+    return dt.toLocaleDateString('it-IT');
+  }
+}
+
+function formatDateLongIT(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  try {
+    return dt.toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   } catch {
     return dt.toLocaleDateString('it-IT');
   }
@@ -98,8 +116,16 @@ function computeBadgeStatus(item: BookingItem, isPast?: boolean): string {
   return String(item.status || 'UNKNOWN');
 }
 
-function ItemRow({ item, isPast }: { item: BookingItem; isPast?: boolean }) {
+function isCancellable(item: BookingItem, isPast?: boolean): boolean {
+  const status = (item.status || '').toUpperCase();
+  if (status === 'CANCELLED' || status === 'CANCELED' || status === 'CANCELLATA' || status === 'PASSATA') return false;
+  // Pre-check 24h: if within 24h, hide/disable button; still rely on server as authority
+  return canCancelBy24h(item.date, item.startTime ?? null);
+}
+
+function ItemRow({ item, isPast, onRequestCancel }: { item: BookingItem; isPast?: boolean; onRequestCancel?: (item: BookingItem) => void }) {
   const badgeStatus = computeBadgeStatus(item, isPast);
+  const cancellable = !isPast && isCancellable(item, isPast);
   return (
     <div role="row" style={{ ...itemRowStyleBase, ...(isPast ? pastItemStyle : null) }}>
       <div role="cell" aria-label="Data">{formatDateIT(item.date)}</div>
@@ -110,6 +136,13 @@ function ItemRow({ item, isPast }: { item: BookingItem; isPast?: boolean }) {
       </div>
       <div role="cell" aria-label="Stato">
         <BookingStatusBadge status={badgeStatus} />
+      </div>
+      <div role="cell" aria-label="Azioni">
+        {cancellable ? (
+          <button style={btnDangerStyle} onClick={() => onRequestCancel && onRequestCancel(item)}>Cancella</button>
+        ) : (
+          <span style={{ color: '#9CA3AF', fontSize: 12 }}>—</span>
+        )}
       </div>
     </div>
   );
@@ -122,6 +155,7 @@ function HeaderRow() {
       <div role="columnheader">Orario</div>
       <div role="columnheader">Sede/Spazio</div>
       <div role="columnheader">Stato</div>
+      <div role="columnheader">Azioni</div>
     </div>
   );
 }
@@ -165,7 +199,12 @@ function useBookingsSection(scope: 'future' | 'past') {
 
   const hasMore = !!cursor;
 
-  return { items, hasMore, loadMore: () => load(false), reload: () => load(true), loading, error, initialized };
+  // Optimistic update on cancel success
+  const onCancelled = React.useCallback((bookingId: string) => {
+    setItems(prev => prev.filter(it => it.id !== bookingId));
+  }, []);
+
+  return { items, hasMore, loadMore: () => load(false), reload: () => load(true), loading, error, initialized, onCancelled };
 }
 
 const srOnly: React.CSSProperties = {
@@ -182,10 +221,46 @@ const srOnly: React.CSSProperties = {
 
 const MyBookingsPage: React.FC = () => {
   const { date } = useSelectedDate();
+  const { tokens } = useAuth();
 
   const future = useBookingsSection('future');
   const [showPast, setShowPast] = React.useState(false);
   const past = useBookingsSection('past');
+
+  const [modalOpen, setModalOpen] = React.useState(false);
+  const [modalError, setModalError] = React.useState<string | null>(null);
+  const [modalLoading, setModalLoading] = React.useState(false);
+  const [selectedItem, setSelectedItem] = React.useState<BookingItem | null>(null);
+
+  const requestCancel = (item: BookingItem) => {
+    setSelectedItem(item);
+    setModalError(null);
+    setModalOpen(true);
+  };
+
+  const confirmCancel = async () => {
+    if (!selectedItem) return;
+    setModalLoading(true);
+    setModalError(null);
+    try {
+      await cancelBooking({ bookingId: selectedItem.id, date: selectedItem.date, startTime: selectedItem.startTime ?? null }, { token: tokens?.accessToken });
+      setModalOpen(false);
+      future.onCancelled(selectedItem.id);
+    } catch (e: any) {
+      const code = e?.code || e?.errorCode;
+      if (code === 'POLICY_24H' || e?.status === 422) {
+        setModalError("La prenotazione non può essere cancellata perché mancano meno di 24 ore all'orario di utilizzo.");
+      } else if (e?.status === 403) {
+        setModalError('Non sei autorizzato a cancellare questa prenotazione.');
+      } else if (e?.status === 404) {
+        setModalError('Prenotazione non trovata o già cancellata.');
+      } else {
+        setModalError('Impossibile cancellare la prenotazione. Riprova più tardi.');
+      }
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
   React.useEffect(() => {
     if (showPast && !past.initialized && !past.loading) past.reload();
@@ -209,7 +284,7 @@ const MyBookingsPage: React.FC = () => {
             ) : future.items.length === 0 ? (
               <div style={{ padding: 12, color: '#6b7280' }}>Nessuna prenotazione futura trovata.</div>
             ) : (
-              future.items.map((it) => <ItemRow key={it.id} item={it} />)
+              future.items.map((it) => <ItemRow key={it.id} item={it} onRequestCancel={requestCancel} />)
             )}
           </div>
         </div>
@@ -259,6 +334,17 @@ const MyBookingsPage: React.FC = () => {
           </div>
         )}
       </section>
+
+      {/* Confirmation Modal */}
+      <ConfirmCancelModal
+        open={modalOpen}
+        onCancel={() => setModalOpen(false)}
+        onConfirm={confirmCancel}
+        isConfirming={modalLoading}
+        errorMessage={modalError}
+        dateLabel={selectedItem ? formatDateLongIT(selectedItem.date) : undefined}
+        deskLabel={selectedItem ? (selectedItem.deskName || `Postazione ${selectedItem.deskId}`) : undefined}
+      />
 
       {/* SR helper for the current context date (shared across app) */}
       <div style={srOnly} aria-live="polite">Contesto data corrente: {date.toLocaleDateString('it-IT')}</div>
