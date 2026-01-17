@@ -4,6 +4,7 @@ import { LegendBar } from '../components/LegendBar';
 import { StationDetail } from '../components/StationDetail';
 import { StationsMap } from '../components/StationsMap';
 import { Station, StationStatus, STATION_IDS } from '../types';
+import { ConfirmBookingModal } from '../components/ConfirmBookingModal';
 
 function mockStations(): Station[] {
   // Simple mock: alternate statuses for visual
@@ -15,6 +16,7 @@ function mockStations(): Station[] {
 export const DashboardPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toISOString());
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const stations = useMemo(() => mockStations(), [lastUpdated]);
 
   const selected = stations.find((s) => s.id === selectedId) || null;
@@ -22,6 +24,29 @@ export const DashboardPage: React.FC = () => {
   const onRefresh = () => {
     // Placeholder: in future call API and update lastUpdated
     setLastUpdated(new Date().toISOString());
+  };
+
+  const handleSelect = (id: string) => {
+    setSelectedId(id);
+    const station = stations.find((s) => s.id === id);
+    // Open confirmation only for available stations
+    if (station?.status === 'available') {
+      setConfirmOpen(true);
+    }
+  };
+
+  const handleCancelConfirm = () => {
+    setConfirmOpen(false);
+  };
+
+  const handleConfirm = async ({ stationId, dateIso }: { stationId: string; dateIso: string }) => {
+    // TODO: integrate real API call: POST /bookings
+    await new Promise((r) => setTimeout(r, 500));
+    // Close modal and keep selection for details, or clear selection based on UX decision.
+    setConfirmOpen(false);
+    // Optionally show a feedback (toast). Placeholder: console.log
+    // eslint-disable-next-line no-console
+    console.log('Prenotazione confermata', { stationId, dateIso });
   };
 
   return (
@@ -32,7 +57,7 @@ export const DashboardPage: React.FC = () => {
       </header>
 
       <div className="map-wrapper">
-        <StationsMap stations={stations} selectedId={selectedId} onSelect={setSelectedId} />
+        <StationsMap stations={stations} selectedId={selectedId} onSelect={handleSelect} />
         {/* Fallback list for very small screens */}
         <div className="fallback-list" aria-label="Lista postazioni (fallback)">
           {stations.map((s) => (
@@ -41,7 +66,9 @@ export const DashboardPage: React.FC = () => {
                 <span className={`dot ${s.status}`} aria-hidden="true" /> {s.id}
               </div>
               <div>
-                <button className="btn" onClick={() => setSelectedId(s.id)}>Apri</button>
+                <button className="btn" onClick={() => handleSelect(s.id)} disabled={s.status !== 'available'}>
+                  {s.status === 'available' ? 'Prenota' : 'Non disponibile'}
+                </button>
               </div>
             </div>
           ))}
@@ -51,7 +78,16 @@ export const DashboardPage: React.FC = () => {
       <LegendBar updatedAt={lastUpdated} />
 
       {/* Detail panel: bottom sheet on mobile. On wide screens, could be rendered in a side panel container */}
-      <StationDetail station={selected} onClose={() => setSelectedId(null)} />
+      {!confirmOpen && <StationDetail station={selected} onClose={() => setSelectedId(null)} />}
+
+      {/* Confirmation modal */}
+      <ConfirmBookingModal
+        open={confirmOpen}
+        stationId={selectedId || ''}
+        stationName={selected?.name}
+        onCancel={handleCancelConfirm}
+        onConfirm={handleConfirm}
+      />
     </section>
   );
 };
