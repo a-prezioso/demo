@@ -1,0 +1,38 @@
+// Prisma schema for SmartDesk Coworking - User model
+// Database: PostgreSQL
+// Notes:
+// - Uses citext for case-insensitive unique email
+// - Stores password hash (no plain password)
+// - Optional salt column (most libs like bcrypt/argon2 embed salt in hash)
+// - Account status as enum with default ACTIVE
+// - Optional email verification support (token + expiration)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  PENDING
+}
+
+model User {
+  id                    String      @id @default(uuid()) @db.Uuid
+  email                 String      @unique @db.Citext
+  passwordHash          String      @map("password_hash") @db.VarChar(255)
+  salt                  String?     @db.VarChar(255)
+  accountStatus         UserStatus  @map("account_status") @default(ACTIVE)
+  verificationToken     String?     @map("verification_token") @unique @db.VarChar(255)
+  verificationExpiresAt DateTime?   @map("verification_expires_at") @db.Timestamptz(6)
+  createdAt             DateTime    @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime    @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  @@map("users")
+  @@index([createdAt])
+}
