@@ -99,6 +99,8 @@ const AppRoutes: React.FC = () => (
         {/* Nuove route dedicate per chiarezza */}
         <Route path="/dashboard/mappa" element={<DashboardMapPage />} />
         <Route path="/dashboard/prenotazioni" element={<MyBookingsPage />} />
+        {/* Alias richiesto: /le-mie-prenotazioni → protegge e reindirizza alla sezione */}
+        <Route path="/le-mie-prenotazioni" element={<Navigate to="/dashboard/prenotazioni" replace />} />
 
         {/* Backward compatibility redirects */}
         <Route path="/dashboard" element={<Navigate to="/dashboard/mappa" replace />} />
