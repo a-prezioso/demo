@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
 // BottomNavigation - persistent bottom bar with primary app destinations
-// Items: Mappa (/dashboard) and Le mie prenotazioni (/my-bookings)
+// Items: Mappa (/dashboard/mappa) and Le mie prenotazioni (/dashboard/prenotazioni)
 // Accessibility: role="navigation", aria-label, NavLink with aria-current on active
 
 export type BottomNavigationProps = {
@@ -74,8 +74,8 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ style, className })
   const search = location.search;
 
   const items = [
-    { to: '/dashboard', label: 'Mappa', icon: '🗺️' },
-    { to: '/my-bookings', label: 'Le mie prenotazioni', icon: '📋' },
+    { to: '/dashboard/mappa', label: 'Mappa', icon: '🗺️' },
+    { to: '/dashboard/prenotazioni', label: "Le mie prenotazioni", icon: '📋' },
   ];
 
   return (

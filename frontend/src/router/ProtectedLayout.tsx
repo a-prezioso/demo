@@ -13,10 +13,28 @@ const containerStyle: React.CSSProperties = {
 };
 
 const ProtectedLayout: React.FC = () => {
+  // Lightweight prefetch of the two primary sections to improve perceived latency
+  React.useEffect(() => {
+    const prefetch = () => {
+      // Fire-and-forget dynamic imports. Bundlers will prefetch/chunk accordingly.
+      import('../pages/DashboardPostazioni').catch(() => void 0);
+      import('../pages/MyBookingsPage').catch(() => void 0);
+    };
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(prefetch);
+    } else {
+      const id = window.setTimeout(prefetch, 150);
+      return () => window.clearTimeout(id);
+    }
+  }, []);
+
   return (
     <div style={containerStyle}>
       <SelectedDateProvider>
-        <Outlet />
+        {/* Lazy-loaded routes render here with a small loading fallback */}
+        <React.Suspense fallback={<div style={{ padding: '1rem' }}>Caricamento…</div>}>
+          <Outlet />
+        </React.Suspense>
         <BottomNavigation />
       </SelectedDateProvider>
     </div>
