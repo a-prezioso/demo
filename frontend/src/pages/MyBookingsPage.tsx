@@ -178,7 +178,7 @@ function ItemRow({ item, isPast, onRequestCancel }: { item: BookingItem; isPast?
       </div>
       <div role="cell" aria-label="Azioni">
         {cancellable ? (
-          <button style={btnDangerStyle} onClick={() => onRequestCancel && onRequestCancel(item)}>Cancella</button>
+          <button data-testid={`cancel-${item.id}`} style={btnDangerStyle} onClick={() => onRequestCancel && onRequestCancel(item)}>Cancella</button>
         ) : (
           <span style={{ color: '#9CA3AF', fontSize: 12 }}>—</span>
         )}
@@ -347,6 +347,7 @@ function StatusFilterBar({ value, onChange }: { value: StatusFilter; onChange: (
   const makeBtn = (val: StatusFilter, label: string) => (
     <button
       key={val}
+      data-testid={`filter-${val}`}
       style={value === val ? pillActive : pillBase}
       onClick={() => onChange(val)}
       aria-pressed={value === val}
@@ -355,7 +356,7 @@ function StatusFilterBar({ value, onChange }: { value: StatusFilter; onChange: (
     </button>
   );
   return (
-    <div style={filterGroupStyle} role="tablist" aria-label="Filtro stato prenotazioni">
+    <div style={filterGroupStyle} role="tablist" aria-label="Filtro stato prenotazioni" data-testid="status-filter">
       {makeBtn('ALL', 'Tutte')}
       {makeBtn('ATTIVA', 'Attive')}
       {makeBtn('PASSATA', 'Passate')}
@@ -372,6 +373,7 @@ function PageSizeSelect({ value, onChange }: { value: number; onChange: (v: numb
         value={value}
         onChange={e => onChange(Number(e.target.value))}
         style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff' }}
+        data-testid="page-size-select"
       >
         <option value={10}>10</option>
         <option value={20}>20</option>
@@ -381,12 +383,13 @@ function PageSizeSelect({ value, onChange }: { value: number; onChange: (v: numb
   );
 }
 
-function Paginator({ page, hasPrev, hasNext, loading, onPrev, onNext }: { page: number; hasPrev: boolean; hasNext: boolean; loading?: boolean; onPrev: () => void; onNext: () => void }) {
+function Paginator({ page, hasPrev, hasNext, loading, onPrev, onNext, testIdPrefix }: { page: number; hasPrev: boolean; hasNext: boolean; loading?: boolean; onPrev: () => void; onNext: () => void; testIdPrefix?: string }) {
+  const prefix = testIdPrefix || 'paginator';
   return (
-    <div style={paginatorStyle}>
-      <button onClick={onPrev} disabled={!hasPrev || loading} style={btnSecondaryStyle}>Precedente</button>
-      <span style={{ fontSize: 12, color: '#4B5563' }}>Pagina {page}</span>
-      <button onClick={onNext} disabled={!hasNext || loading} style={btnSecondaryStyle}>Successiva</button>
+    <div style={paginatorStyle} data-testid={prefix}>
+      <button data-testid={`${prefix}-prev`} onClick={onPrev} disabled={!hasPrev || loading} style={btnSecondaryStyle}>Precedente</button>
+      <span data-testid={`${prefix}-label`} style={{ fontSize: 12, color: '#4B5563' }}>Pagina {page}</span>
+      <button data-testid={`${prefix}-next`} onClick={onNext} disabled={!hasNext || loading} style={btnSecondaryStyle}>Successiva</button>
       {loading ? <span aria-live="polite" style={{ fontSize: 12, color: '#6B7280' }}>Caricamento…</span> : null}
     </div>
   );
@@ -502,17 +505,19 @@ const MyBookingsPage: React.FC = () => {
         <section aria-labelledby="heading-future" style={{ marginTop: 8 }}>
           <div style={toolbarStyle}>
             <h2 id="heading-future" style={sectionTitleStyle}>Prossime</h2>
-            <Paginator page={future.page} hasPrev={future.hasPrev} hasNext={future.hasNext} loading={future.loading} onPrev={future.goPrev} onNext={future.goNext} />
+            <div data-testid="paginator-future">
+              <Paginator testIdPrefix="paginator-future" page={future.page} hasPrev={future.hasPrev} hasNext={future.hasNext} loading={future.loading} onPrev={future.goPrev} onNext={future.goNext} />
+            </div>
           </div>
-          <div style={listContainerStyle} role="table" aria-label="Prossime prenotazioni">
+          <div style={listContainerStyle} role="table" aria-label="Prossime prenotazioni" data-testid="future-table">
             <HeaderRow />
             <div role="rowgroup">
               {future.loading && !future.initialized ? (
                 <div style={{ padding: 12 }} role="status" aria-live="polite">Caricamento…</div>
               ) : future.error ? (
-                <div style={{ padding: 12, color: '#B91C1C' }}>Errore: {future.error} <button onClick={future.reload} style={{ ...btnSecondaryStyle, marginLeft: 8 }}>Riprova</button></div>
+                <div style={{ padding: 12, color: '#B91C1C' }} data-testid="error-future">Errore: {future.error} <button onClick={future.reload} style={{ ...btnSecondaryStyle, marginLeft: 8 }}>Riprova</button></div>
               ) : future.items.length === 0 ? (
-                <div style={{ padding: 12, color: '#6b7280' }}>Nessuna prenotazione futura trovata.</div>
+                <div style={{ padding: 12, color: '#6b7280' }} data-testid="empty-future">Nessuna prenotazione futura trovata.</div>
               ) : (
                 future.items.map((it) => <ItemRow key={it.id} item={it} onRequestCancel={requestCancel} />)
               )}
@@ -521,7 +526,7 @@ const MyBookingsPage: React.FC = () => {
           {/* Legacy progressive load retained for compatibility */}
           {future.hasMore && (
             <div style={{ marginTop: 8 }}>
-              <button onClick={future.loadMore} disabled={future.loading} style={btnStyle}>
+              <button onClick={future.loadMore} disabled={future.loading} style={btnStyle} data-testid="future-load-more">
                 {future.loading ? 'Caricamento…' : 'Carica altre'}
               </button>
             </div>
@@ -540,24 +545,27 @@ const MyBookingsPage: React.FC = () => {
                 aria-controls="past-list"
                 onClick={() => setShowPast(s => !s)}
                 style={btnSecondaryStyle}
+                data-testid="toggle-past"
               >
                 {showPast ? 'Nascondi' : 'Mostra'}
               </button>
             )}
             {statusFilter !== 'ALL' && (
-              <Paginator page={past.page} hasPrev={past.hasPrev} hasNext={past.hasNext} loading={past.loading} onPrev={past.goPrev} onNext={past.goNext} />
+              <div data-testid="paginator-past">
+                <Paginator testIdPrefix="paginator-past" page={past.page} hasPrev={past.hasPrev} hasNext={past.hasNext} loading={past.loading} onPrev={past.goPrev} onNext={past.goNext} />
+              </div>
             )}
           </div>
           {(statusFilter !== 'ALL' || showPast) && (
-            <div id="past-list" style={{ ...listContainerStyle, marginTop: 8 }} role="table" aria-label="Prenotazioni passate">
+            <div id="past-list" style={{ ...listContainerStyle, marginTop: 8 }} role="table" aria-label="Prenotazioni passate" data-testid="past-table">
               <HeaderRow />
               <div role="rowgroup">
                 {past.loading && !past.initialized ? (
                   <div style={{ padding: 12 }} role="status" aria-live="polite">Caricamento…</div>
                 ) : past.error ? (
-                  <div style={{ padding: 12, color: '#B91C1C' }}>Errore: {past.error} <button onClick={past.reload} style={{ ...btnSecondaryStyle, marginLeft: 8 }}>Riprova</button></div>
+                  <div style={{ padding: 12, color: '#B91C1C' }} data-testid="error-past">Errore: {past.error} <button onClick={past.reload} style={{ ...btnSecondaryStyle, marginLeft: 8 }}>Riprova</button></div>
                 ) : past.items.length === 0 ? (
-                  <div style={{ padding: 12, color: '#6b7280' }}>Nessuna prenotazione passata.</div>
+                  <div style={{ padding: 12, color: '#6b7280' }} data-testid="empty-past">Nessuna prenotazione passata.</div>
                 ) : (
                   past.items.map((it) => <ItemRow key={it.id} item={it} isPast />)
                 )}
@@ -567,7 +575,7 @@ const MyBookingsPage: React.FC = () => {
           {/* Legacy progressive load retained for compatibility */}
           {showPast && past.hasMore && statusFilter === 'ALL' && (
             <div style={{ marginTop: 8 }}>
-              <button onClick={past.loadMore} disabled={past.loading} style={btnStyle}>
+              <button onClick={past.loadMore} disabled={past.loading} style={btnStyle} data-testid="past-load-more">
                 {past.loading ? 'Caricamento…' : 'Carica altre'}
               </button>
             </div>
