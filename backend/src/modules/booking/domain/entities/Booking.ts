@@ -14,4 +14,8 @@ export interface Booking {
   updatedAt: string; // ISO
   // Legacy compatibility (optional/derived):
   legacyStatus?: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | string;
+  // Cancellation audit (optional)
+  cancelledAt?: string | null; // ISO
+  cancelledBy?: string | null; // userId or system
+  cancelReason?: string | null;
 }
