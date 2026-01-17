@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 import { useAuth, AuthProvider } from '../context/AuthContext';
+import ProfilePage from '../pages/ProfilePage';
 
 // Placeholder pages: in a real app, replace with actual components
 const LoginPage: React.FC = () => {
@@ -66,7 +67,9 @@ const DashboardPage: React.FC = () => {
     <div>
       <h1>Dashboard</h1>
       <p>Welcome {user?.email}</p>
-      <a href="/timesheet">Timesheet</a> | <a href="/projects">Projects</a>
+      <nav style={{ display: 'flex', gap: '0.5rem' }}>
+        <a href="/timesheet">Timesheet</a> | <a href="/projects">Projects</a> | <a href="/profile">Profile</a>
+      </nav>
       <div>
         <button onClick={logout}>Logout</button>
       </div>
@@ -90,6 +93,7 @@ const AppRoutes: React.FC = () => (
       <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/timesheet" element={<TimesheetPage />} />
       <Route path="/projects" element={<ProjectsPage />} />
+      <Route path="/profile" element={<ProfilePage />} />
     </Route>
 
     {/* Fallback */}
