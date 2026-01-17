@@ -8,6 +8,9 @@ export interface Booking {
   userId: string;
   deskId: string;
   date: string; // YYYY-MM-DD
+  // Start/end instants (UTC ISO) optional; if absent, UI/logic fall back to 09:00 local
+  startAt?: string | null;
+  endAt?: string | null;
   status: BookingState;
   cancelledAt?: string | null; // ISO string
   createdAt: string;

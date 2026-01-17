@@ -61,6 +61,10 @@ model Booking {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   deskId      String       @map("desk_id") @db.VarChar(64)
   date        DateTime     @db.Date
+  // Orario di inizio utilizzo prenotazione; opzionale per compatibilità con data-only.
+  startAt     DateTime?    @map("start_at") @db.Timestamptz(6)
+  // Orario di fine utilizzo prenotazione; opzionale e futuro.
+  endAt       DateTime?    @map("end_at") @db.Timestamptz(6)
   status      BookingState @map("stato") @default(ATTIVA)
   cancelledAt DateTime?    @map("cancelled_at") @db.Timestamptz(6)
   createdAt   DateTime     @map("created_at") @default(now()) @db.Timestamptz(6)
