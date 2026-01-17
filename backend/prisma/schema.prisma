@@ -22,6 +22,13 @@ enum UserStatus {
   PENDING
 }
 
+// Stato prenotazione: PASSATA, ATTIVA, CANCELLATA
+enum BookingState {
+  PASSATA
+  ATTIVA
+  CANCELLATA
+}
+
 model User {
   id                    String      @id @default(uuid()) @db.Uuid
   email                 String      @unique @db.Citext
@@ -41,9 +48,28 @@ model User {
 
   // Relations
   refreshTokens         RefreshToken[]
+  bookings              Booking[]
 
   @@map("users")
   @@index([createdAt])
+}
+
+// Prenotazioni giornaliere delle postazioni
+model Booking {
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deskId      String       @map("desk_id") @db.VarChar(64)
+  date        DateTime     @db.Date
+  status      BookingState @map("stato") @default(ATTIVA)
+  cancelledAt DateTime?    @map("cancelled_at") @db.Timestamptz(6)
+  createdAt   DateTime     @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime     @map("updated_at") @updatedAt @db.Timestamptz(6)
+
+  @@map("bookings")
+  @@unique([deskId, date])
+  @@index([userId, date])
+  @@index([userId, status, date])
 }
 
 // Refresh tokens/session tracking for JWT auth
