@@ -5,6 +5,8 @@ import { useAuth, AuthProvider } from '../context/AuthContext';
 import ProfilePage from '../pages/ProfilePage';
 import DashboardPostazioni from '../pages/DashboardPostazioni';
 import BookingPage from '../pages/BookingPage';
+import ProtectedLayout from './ProtectedLayout';
+import MyBookingsPage from '../pages/MyBookingsPage';
 
 // Placeholder pages: in a real app, replace with actual components
 const LoginPage: React.FC = () => {
@@ -101,11 +103,15 @@ const AppRoutes: React.FC = () => (
 
     {/* Protected routes wrapper */}
     <Route element={<ProtectedRoute />}>
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/booking" element={<BookingPage />} />
-      <Route path="/timesheet" element={<TimesheetPage />} />
-      <Route path="/projects" element={<ProjectsPage />} />
-      <Route path="/profile" element={<ProfilePage />} />
+      {/* Layout con bottom navigation persistente */}
+      <Route element={<ProtectedLayout />}>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/my-bookings" element={<MyBookingsPage />} />
+        <Route path="/booking" element={<BookingPage />} />
+        <Route path="/timesheet" element={<TimesheetPage />} />
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+      </Route>
     </Route>
 
     {/* Fallback */}
