@@ -42,8 +42,14 @@ export class DuplicateEmailError extends Error {
 export class InMemoryUserRepository implements IUserRepository {
   private byId: Map<string, User> = new Map();
   private byEmail: Map<string, string> = new Map(); // email -> id
+  private failCreateOnce = false; // testing hook: next create fails simulating DB error
 
   async create(user: User): Promise<User> {
+    if (this.failCreateOnce) {
+      // reset the flag and throw to simulate DB failure
+      this.failCreateOnce = false;
+      throw new Error('Simulated repository failure');
+    }
     const emailKey = user.email.toLowerCase();
     if (this.byEmail.has(emailKey)) {
       throw new DuplicateEmailError();
@@ -62,5 +68,22 @@ export class InMemoryUserRepository implements IUserRepository {
 
   async findById(id: string): Promise<User | null> {
     return this.byId.get(id) ?? null;
+  }
+
+  // Testing utilities (no-op in production)
+  // Clears all stored users for clean test isolation
+  clearAll(): void {
+    this.byId.clear();
+    this.byEmail.clear();
+  }
+
+  // Returns current number of stored users
+  count(): number {
+    return this.byId.size;
+  }
+
+  // Make the next create() call fail simulating a DB error
+  failNextCreate(): void {
+    this.failCreateOnce = true;
   }
 }
