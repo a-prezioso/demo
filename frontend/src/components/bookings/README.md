@@ -1,21 +1,17 @@
-BookingStatusBadge component
+MyBookings - Cancellation UX
 
-- Props
-  - state: backend state (ATTIVA | PASSATA | CANCELLATA | string)
-  - size: 'sm' | 'md' (default md)
-  - withIcon: boolean (default true)
-  - className: additional classes
-  - label: optional label override
-  - t: optional translation function (key, vars) => string
+Scope
+- Provide a cancellazione azione nella pagina "Le Mie Prenotazioni" con rispetto vincolo 24h.
 
-- Accessibility
-  - role="status", aria-label and title include localized state
-  - High-contrast defaults; integrate with design tokens for WCAG AA
+Key points
+- Usa isBookingCancellable per pre-check client (non autoritativo).
+- Conferma tramite window.confirm (può essere sostituito con modal UI lib).
+- Chiamata POST /api/bookings/:id/cancel via cancelBooking helper.
+- Gestione errori: se backend risponde con code BOOKING_CANCELLATION_WINDOW, mostra messaggio localizzato che ricorda le 24 ore.
+- Aggiorna la lista in memoria senza ricaricare la pagina. onRefresh callback opzionale per refetch esterno.
 
-- Styling
-  - CSS variables for tones: success, danger, neutral
-  - See BookingStatusBadge.css
+Accessibility
+- Button con aria-label specifico per ogni prenotazione.
 
-- i18n keys
-  - booking.state.ATTIVA | PASSATA | CANCELLATA | UNKNOWN
-  - booking.badge.aria
+Mobile/Desktop
+- Stili inline minimi responsivi. Integrare con design system del portale se disponibile.

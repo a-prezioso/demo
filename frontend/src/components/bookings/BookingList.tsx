@@ -1,86 +1,46 @@
 import React from 'react';
+import { BookingStatusBadge } from './BookingStatusBadge';
 
-export type BookingItem = {
-  id: string;
-  start: string; // ISO date-time
-  end: string; // ISO date-time
-  location?: string;
-  status?: string;
-  title?: string; // desk/room name or generic title
-};
-
-export interface BookingListProps {
-  items: BookingItem[];
-  loading?: boolean;
-  error?: string | null;
-  emptyMessage?: string;
+interface BookingListProps {
+  bookings: any[];
+  renderActions?: (booking: any) => React.ReactNode;
 }
 
-function byStartAsc(a: BookingItem, b: BookingItem) {
-  const ta = new Date(a.start).getTime();
-  const tb = new Date(b.start).getTime();
-  return ta - tb;
-}
-
-export function BookingList({ items, loading, error, emptyMessage = 'Nessuna prenotazione' }: BookingListProps) {
-  if (loading) {
-    return (
-      <div data-testid="loading" aria-live="polite" role="status">
-        Caricamento...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div data-testid="error" role="alert">
-        Errore: {error}
-      </div>
-    );
-  }
-
-  const sorted = [...(items || [])].sort(byStartAsc);
-
-  if (sorted.length === 0) {
-    return (
-      <div data-testid="empty-state">
-        {emptyMessage}
-      </div>
-    );
+export const BookingList: React.FC<BookingListProps> = ({ bookings, renderActions }) => {
+  if (!bookings || bookings.length === 0) {
+    return <div>Nessuna prenotazione presente</div>;
   }
 
   return (
-    <div data-testid="my-bookings-list">
-      <ul>
-        {sorted.map((b) => {
-          const start = new Date(b.start);
-          const end = new Date(b.end);
-          const dateFormatter = new Intl.DateTimeFormat(undefined, {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-          });
-          const timeFormatter = new Intl.DateTimeFormat(undefined, {
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-          const dateLabel = `${dateFormatter.format(start)} ${timeFormatter.format(start)} - ${timeFormatter.format(end)}`;
-          return (
-            <li key={b.id} data-testid="booking-row">
-              <div data-testid="booking-title">{b.title || 'Prenotazione'}</div>
-              <div data-testid="booking-date">{dateLabel}</div>
-              {b.location ? (
-                <div data-testid="booking-location">{b.location}</div>
-              ) : null}
-              {b.status ? (
-                <div data-testid="booking-status">{b.status}</div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+    <div style={{ display: 'grid', gap: 12 }}>
+      {bookings.map((b) => (
+        <div
+          key={b.id}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            alignItems: 'center',
+            padding: 12,
+            border: '1px solid #eee',
+            borderRadius: 8,
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 600 }}>{b.spaceName || b.serviceName || 'Postazione'}</div>
+            <div style={{ fontSize: 14, color: '#555' }}>
+              {b.date || b.startAt || b.startDateTime}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <BookingStatusBadge status={b.status} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {renderActions ? renderActions(b) : null}
+          </div>
+        </div>
+      ))}
     </div>
   );
-}
+};
 
 export default BookingList;
