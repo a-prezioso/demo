@@ -20,3 +20,5 @@ export * from './api/calendar/calendar.controller';
 export * from './modules/bookings/booking.model';
 export * from './modules/bookings/booking.repository';
 export * from './api/bookings';
+export * from './modules/calendar/closure.repository';
+export * from './modules/calendar/closure.service';
