@@ -8,10 +8,12 @@ Paths
 - docs/auth_jwt.md: Authentication and JWT design
 - docs/auth_refresh_endpoint.md: Detailed refresh endpoint and middleware summary
 - docs/auth_flow_diagram.txt: High-level text diagram of auth flow
+- docs/frontend_auth_components.md: React components for login/signup (client-side)
 - src/security: Security services (password hashing/verification and input validation)
 - src/api: Minimal HTTP API server exposing /api/auth/signup and /api/auth/login
 - src/db: Database client (pg)
 - src/api/repositories: Persistence layer for refresh tokens
+- src/client: Minimal React components and client helpers for authentication
 
 Applying the migrations (PostgreSQL)
 - Requires extensions: citext, pgcrypto
@@ -54,6 +56,7 @@ Refresh token persistence
 JWT and refresh flow documentation
 - See docs/auth_jwt.md for a complete overview: token formats, claims, lifetimes, middleware behavior, endpoint specs, and examples.
 - See docs/auth_refresh_endpoint.md for a focused spec of POST /api/auth/refresh and middleware quick reference.
+- See docs/frontend_auth_components.md for instructions on integrating the client-side React components for login/signup.
 
 Maintenance
 - Schedule periodic cleanup of expired/old revoked refresh tokens using cleanupExpired({ retentionDays }).
