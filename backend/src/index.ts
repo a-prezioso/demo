@@ -17,3 +17,6 @@ export * from './modules/desks/desk.model';
 export * from './modules/desks/desk.repository';
 export * from './api/desks/desks.controller';
 export * from './api/calendar/calendar.controller';
+export * from './modules/bookings/booking.model';
+export * from './modules/bookings/booking.repository';
+export * from './api/bookings';
