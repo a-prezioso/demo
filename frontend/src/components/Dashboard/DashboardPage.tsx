@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import ProtectedRoute from '../../router/ProtectedRoute';
 import { useDesksData } from './useDesksData';
+import { BookingConfirmationDialog } from '../Booking/BookingConfirmationDialog';
 
 export type DeskStatus = 'free' | 'busy' | 'unavailable';
 
@@ -57,6 +58,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   bookingDate,
 }) => {
   const [selected, setSelected] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState<boolean>(false);
+  const [confirmLoading, setConfirmLoading] = useState<boolean>(false);
 
   // Integrate with backend via hook; if desks prop provided, keep using it (e.g., tests)
   const { desks: liveDesks, loading, error, lastUpdated, refresh } = useDesksData({
@@ -119,6 +122,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       floor: null,
     };
     onDeskSelected?.(desk, todayAtStart, preview);
+    setShowConfirm(true);
+  }
+
+  async function handleConfirm(preview: BookingPreview) {
+    try {
+      setConfirmLoading(true);
+      // Propaga l'evento verso l'esterno; l'handler può essere async
+      await onConfirmBooking?.(preview);
+      // Chiusura popup
+      setShowConfirm(false);
+      setSelected(null);
+    } finally {
+      setConfirmLoading(false);
+    }
+  }
+
+  function handleCancel() {
+    setShowConfirm(false);
   }
 
   return (
@@ -175,9 +196,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       <DetailsSheet
         desk={current}
         preview={currentPreview}
-        onClose={() => setSelected(null)}
+        onClose={() => { setSelected(null); setShowConfirm(false); }}
         onBook={(deskId: string) => onBook?.(deskId)}
-        onConfirm={(p) => onConfirmBooking?.(p)}
+        onConfirm={(p) => setShowConfirm(true)}
+      />
+
+      <BookingConfirmationDialog
+        isOpen={!!current && showConfirm}
+        preview={currentPreview}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+        loading={confirmLoading}
       />
     </div>
   );
