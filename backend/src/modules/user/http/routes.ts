@@ -10,6 +10,8 @@ export function registerAuthRoutes(router: Router, usersRepo: IUserRepository): 
 
   router.post('/api/auth/signup', ctrl.signup);
   router.post('/api/auth/login', ctrl.login);
+  router.post('/api/auth/refresh', ctrl.refresh);
+  router.post('/api/auth/logout', jwtAuthGuard(), ctrl.logout);
 
   // Example protected route pattern (placeholder): returns current user info
   router.get('/api/auth/me', jwtAuthGuard(), (req: any, res) => {

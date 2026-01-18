@@ -21,4 +21,10 @@ export interface RefreshTokenRecord extends CreateRefreshTokenInput {
 
 export interface IRefreshTokenRepository {
   createRefreshToken(data: CreateRefreshTokenInput): Promise<RefreshTokenRecord>;
+  // Lookup by hashed refresh token
+  findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenRecord | null>;
+  // Revoke a specific token by id, optionally linking to a replacement token id
+  revokeRefreshToken(id: string, reason?: string, replacementTokenId?: string | null): Promise<void>;
+  // Revoke all active tokens for a user (e.g., global logout)
+  revokeAllUserTokens(userId: string, reason?: string): Promise<void>;
 }

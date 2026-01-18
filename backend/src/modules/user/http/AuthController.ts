@@ -63,4 +63,50 @@ export class AuthController {
       return res.status(500).json({ success: false, error: { message: 'Internal server error' } });
     }
   };
+
+  // POST /api/auth/refresh
+  refresh = async (req: Request, res: Response) => {
+    try {
+      const { refreshToken } = (req.body || {}) as { refreshToken?: string };
+      const result = await this.authService.refresh({ refreshToken: refreshToken ?? '' }, {
+        userAgent: req.headers['user-agent'] as string | undefined,
+        ip: (req.headers['x-forwarded-for'] as string) || req.ip,
+      });
+      return res.status(200).json({ success: true, data: result });
+    } catch (e: any) {
+      if (e?.code === 'BAD_REQUEST') {
+        return res.status(400).json({ success: false, error: { message: 'Invalid input', details: e.details || [] } });
+      }
+      if (e?.code === 'UNAUTHORIZED') {
+        return res.status(401).json({ success: false, error: { message: 'Invalid refresh token' } });
+      }
+      if (e?.code === 'NOT_IMPLEMENTED') {
+        return res.status(501).json({ success: false, error: { message: 'Refresh not supported' } });
+      }
+      return res.status(500).json({ success: false, error: { message: 'Internal server error' } });
+    }
+  };
+
+  // POST /api/auth/logout
+  logout = async (req: Request, res: Response) => {
+    try {
+      const { refreshToken, all } = (req.body || {}) as { refreshToken?: string; all?: boolean };
+      // If 'all' and we have an authenticated user via middleware, revoke all tokens for user
+      if (all && (req as any).user?.id) {
+        await this.authService.logout({ userId: (req as any).user.id });
+        return res.status(200).json({ success: true });
+      }
+      // Otherwise, try to revoke specific refresh token value
+      await this.authService.logout({ refreshToken: refreshToken });
+      return res.status(200).json({ success: true });
+    } catch (e: any) {
+      if (e?.code === 'BAD_REQUEST') {
+        return res.status(400).json({ success: false, error: { message: 'Invalid input', details: e.details || [] } });
+      }
+      if (e?.code === 'NOT_IMPLEMENTED') {
+        return res.status(501).json({ success: false, error: { message: 'Logout not supported' } });
+      }
+      return res.status(500).json({ success: false, error: { message: 'Internal server error' } });
+    }
+  };
 }
