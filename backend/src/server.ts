@@ -3,6 +3,7 @@
 
 import express from 'express';
 import { authRouter } from './modules/user/interfaces/http/authRoutes';
+import { loginRouter } from './modules/auth/interfaces/http/loginRoute';
 import { logger } from './core/logging/logger';
 
 const app = express();
@@ -10,6 +11,7 @@ app.use(express.json());
 
 // Base path for API
 app.use('/api/auth', authRouter);
+app.use('/api/auth', loginRouter);
 
 // Health endpoint
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));

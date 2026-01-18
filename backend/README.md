@@ -25,19 +25,11 @@ Security services added:
 HTTP API added:
 - Express server in src/server.ts
 - Auth routes in src/modules/user/interfaces/http/authRoutes.ts exposing POST /api/auth/signup
-  - Validates input using validateSignupInput()
-  - Uses UserService for normalization + hashing + creation
-  - Responds 201 with non-sensitive user fields
-  - Error handling: 400 invalid input, 409 duplicate email, 500 internal errors
+- Login route in src/modules/auth/interfaces/http/loginRoute.ts exposing POST /api/auth/login
 
-Repository additions:
-- InMemoryUserRepository for development/testing
-- DuplicateEmailError to signal unique email violation from repository/DB layer
+JWT services:
+- src/core/jwt/jwtService.ts minimal HS256 signer and random refresh token generator
 
-Auth design documentation:
-- docs/authentication.md describes JWT-based login, token payload, TTLs, error cases, and sessions/refresh-token model
-- Added Prisma model Session and migration prisma/migrations/202601180002_auth_sessions
-
-To run locally (example):
-- Add a package.json with express and types, then ts-node/ts-node-dev for dev runs
-- Start server: ts-node src/server.ts (or compile with tsc if configured)
+Tests:
+- Unit tests for security and user entity
+- Integration tests for signup and login endpoints

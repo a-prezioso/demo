@@ -70,3 +70,6 @@ authRouter.post('/signup', async (req: Request, res: Response, _next: NextFuncti
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Export the in-memory repository instance for other routes (e.g., login) to reuse during development/testing
+export const authRepo = repo;
