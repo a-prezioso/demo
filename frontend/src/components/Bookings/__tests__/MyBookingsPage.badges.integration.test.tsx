@@ -13,7 +13,7 @@ jest.mock('../../../api/bookingsClient', () => {
 });
 
 // Types and helpers
-import { listMyBookings } from '../../../api/bookingsClient' as any;
+import { listMyBookings } from '../../../api/bookingsClient';
 
 type BookingItem = {
   id: string;
