@@ -1,105 +1,41 @@
 "use strict";
 
-// Minimal auth API client for the PWA
-// Exposes: signup, login, refresh, logout
-// Uses fetch and tokenStorage to persist tokens
-
+const http = require("./httpClient");
 const tokenStorage = require("../storage/tokenStorage");
 
-const API_BASE = process.env.API_BASE_URL || "/api";
-
-async function parseJson(res) {
-  const text = await res.text();
-  try {
-    return text ? JSON.parse(text) : {};
-  } catch (_e) {
-    return {};
+async function login({ email, password }) {
+  const res = await http.post("/api/auth/login", { email, password });
+  // Persist tokens to survive refresh
+  if (res && res.accessToken) {
+    tokenStorage.setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken, expiresIn: res.expiresIn });
   }
-}
-
-function headers(json = true, withAuth = false) {
-  const h = {};
-  if (json) h["Content-Type"] = "application/json";
-  if (withAuth) {
-    const at = tokenStorage.getAccessToken();
-    if (at) h["Authorization"] = `Bearer ${at}`;
-  }
-  return h;
+  return res;
 }
 
 async function signup({ email, password }) {
-  const res = await fetch(`${API_BASE}/auth/signup`, {
-    method: "POST",
-    headers: headers(true, false),
-    body: JSON.stringify({ email, password }),
-  });
-  const data = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(data && data.error ? data.error : "Signup failed");
-  }
-  return data; // { id, email, status, created_at, updated_at }
-}
-
-async function login({ email, password }) {
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: headers(true, false),
-    body: JSON.stringify({ email, password }),
-  });
-  const data = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(data && data.error ? data.error : "Login failed");
-  }
-  // Expected: { accessToken, refreshToken, tokenType, expiresIn, user }
-  tokenStorage.setTokens({
-    accessToken: data.accessToken,
-    refreshToken: data.refreshToken,
-    expiresIn: data.expiresIn,
-  });
-  return data;
+  const res = await http.post("/api/auth/signup", { email, password });
+  return res;
 }
 
 async function refresh({ rotate = true } = {}) {
-  const rt = tokenStorage.getRefreshToken();
-  if (!rt) throw new Error("Missing refresh token");
-  const res = await fetch(`${API_BASE}/auth/refresh`, {
-    method: "POST",
-    headers: headers(true, false),
-    body: JSON.stringify({ refreshToken: rt, rotate }),
-  });
-  const data = await parseJson(res);
-  if (!res.ok) {
-    throw new Error(data && data.error ? data.error : "Refresh failed");
+  const res = await http.post("/api/auth/refresh", { rotate });
+  if (res && res.accessToken) {
+    tokenStorage.setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken, expiresIn: res.expiresIn });
   }
-  // If rotate=true, new refresh token is returned
-  tokenStorage.setTokens({
-    accessToken: data.accessToken,
-    refreshToken: data.refreshToken || rt,
-    expiresIn: data.expiresIn,
-  });
-  return data;
+  return res;
 }
 
 async function logout({ allSessions = false } = {}) {
-  const rt = tokenStorage.getRefreshToken();
-  const at = tokenStorage.getAccessToken();
-  const res = await fetch(`${API_BASE}/auth/logout`, {
-    method: "POST",
-    headers: headers(true, !!at),
-    body: JSON.stringify({ refreshToken: rt, allSessions }),
-  });
-  // On success or failure, clear local tokens to be safe
-  tokenStorage.clearTokens();
-  if (!res.ok) {
-    const data = await parseJson(res);
-    throw new Error(data && data.error ? data.error : "Logout failed");
+  try {
+    await http.post("/api/auth/logout", { allSessions });
+  } finally {
+    tokenStorage.clearTokens();
   }
-  return true;
 }
 
 module.exports = {
-  signup,
   login,
+  signup,
   refresh,
   logout,
 };
