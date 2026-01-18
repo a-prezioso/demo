@@ -1,3 +1,2 @@
-export { ItalianHolidayService } from './service/ItalianHolidayService';
-export { CalendarController } from './http/CalendarController';
-export { registerCalendarRoutes } from './http/routes';
+export type { IClosureRepository, CoworkingClosure, ClosureType } from './service/ClosureService';
+export { ClosureService } from './service/ClosureService';

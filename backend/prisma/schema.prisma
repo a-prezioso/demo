@@ -19,6 +19,14 @@ enum AccountStatus {
   DISABLED
 }
 
+// Coworking closure types
+enum ClosureType {
+  SINGLE
+  WEEKLY
+  ANNUAL
+  @@map("closure_type")
+}
+
 /// User model
 /// IMPORTANT: Do not log sensitive fields (passwordHash, salt, verificationToken)
 model User {
@@ -91,4 +99,23 @@ model Booking {
   @@unique([deskId, date, timeSlot], map: "uq_booking_unique")
   @@index([userId], map: "idx_bookings_user_id")
   @@index([date], map: "idx_bookings_date")
+}
+
+// Coworking closures configuration
+model CoworkingClosure {
+  id        String   @id @default(uuid()) @db.Uuid
+  type      ClosureType
+  date      DateTime? // for SINGLE
+  weekday   Int?      @db.SmallInt // 0..6 for WEEKLY
+  month     Int?      @db.SmallInt // 1..12 for ANNUAL
+  monthDay  Int?      @map("month_day") @db.SmallInt // 1..31 for ANNUAL
+  reason    String?   @db.VarChar(255)
+  active    Boolean   @default(true)
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("coworking_closures")
+  @@index([active], map: "idx_cw_closures_active")
 }
