@@ -7,7 +7,7 @@ const statusColor: Record<DeskStatus, string> = {
   UNAVAILABLE: '#9ca3af',
 };
 
-export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000 }: { baseUrl?: string; refreshMs?: number }) {
+export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000, onSelect }: { baseUrl?: string; refreshMs?: number; onSelect?: (desk: Desk) => void }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<Desk[]>([]);
@@ -40,9 +40,18 @@ export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000 }: { baseU
   return (
     <div className="grid grid-cols-3 gap-2" aria-label="dashboard">
       {items.map((d) => (
-        <div key={d.id} data-testid={`desk-${d.id}`} style={{ backgroundColor: statusColor[d.status] }} className="h-12 rounded text-white flex items-center justify-center">
+        <button
+          key={d.id}
+          data-testid={`desk-${d.id}`}
+          style={{ backgroundColor: statusColor[d.status] }}
+          className="h-12 rounded text-white flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onClick={() => d.status === 'FREE' && onSelect?.(d)}
+          disabled={d.status !== 'FREE'}
+          aria-disabled={d.status !== 'FREE'}
+          aria-label={`Postazione ${d.name} ${d.status === 'FREE' ? 'disponibile' : 'non disponibile'}`}
+        >
           {d.name}
-        </div>
+        </button>
       ))}
       {items.length < 12 && Array.from({ length: 12 - items.length }).map((_, i) => (
         <div key={`empty-${i}`} className="h-12 rounded bg-gray-200" />
