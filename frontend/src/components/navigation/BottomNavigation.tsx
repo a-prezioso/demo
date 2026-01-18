@@ -7,7 +7,7 @@ export interface BottomNavigationProps {
 }
 
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ onNavigate }) => {
-  const { navigate, currentPath } = useRouter();
+  const { navigate, currentPath } = useRouter() as any;
   const { date } = useSelectedDate();
 
   const go = (href: string) => (e: React.MouseEvent) => {
@@ -22,12 +22,18 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ onNavigate }
     return u.pathname + u.search;
   };
 
+  const mapHref = mkHref('/dashboard/mappa');
+  const bookingsHref = mkHref('/dashboard/prenotazioni');
+
+  const isOnMap = currentPath?.startsWith('/dashboard/mappa') || currentPath?.startsWith('/dashboard');
+  const isOnBookings = currentPath?.startsWith('/dashboard/prenotazioni') || currentPath?.startsWith('/le-mie-prenotazioni');
+
   return (
     <nav className="sd-bottom-nav" role="navigation" aria-label="Navigazione">
-      <Link href={mkHref('/dashboard')} onClick={go(mkHref('/dashboard'))} aria-current={currentPath.startsWith('/dashboard') ? 'page' : undefined}>
+      <Link href={mapHref} onClick={go(mapHref)} aria-current={isOnMap ? 'page' : undefined}>
         Mappa
       </Link>
-      <Link href={mkHref('/le-mie-prenotazioni')} onClick={go(mkHref('/le-mie-prenotazioni'))} aria-current={currentPath.startsWith('/le-mie-prenotazioni') ? 'page' : undefined}>
+      <Link href={bookingsHref} onClick={go(bookingsHref)} aria-current={isOnBookings ? 'page' : undefined}>
         Le mie prenotazioni
       </Link>
     </nav>
