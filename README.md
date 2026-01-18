@@ -8,7 +8,7 @@ Paths
 - docs/auth_jwt.md: Authentication and JWT design
 - docs/auth_flow_diagram.txt: High-level text diagram of auth flow
 - src/security: Security services (password hashing/verification and input validation)
-- src/api: Minimal HTTP API server exposing /api/auth/signup
+- src/api: Minimal HTTP API server exposing /api/auth/signup and /api/auth/login
 - src/db: Database client (pg)
 
 Applying the migrations (PostgreSQL)
@@ -25,6 +25,7 @@ Conventions
 Security services
 - passwordService: hashPassword(plain), verifyPassword(plain, hash)
 - validationService: validateEmail(email) -> {valid, email, error}; validatePassword(pwd) -> {valid, error}
+- jwtService: sign(payload[, {expiresInSeconds}]) -> { token, expiresIn }; verify(token) -> { valid, payload }
 - Config via env:
   SECURITY_SCRYPT_N (default 16384)
   SECURITY_SCRYPT_R (8)
@@ -37,36 +38,16 @@ Security services
   SECURITY_PASSWORD_REQUIRE_NUMBER (true)
   SECURITY_PASSWORD_REQUIRE_SYMBOL (true)
   SECURITY_PASSWORD_FORBID_COMMON (true)
+  JWT_SECRET (required in prod)
+  JWT_ISSUER (smartdesk)
+  JWT_AUDIENCE (smartdesk-clients)
+  JWT_ACCESS_EXPIRES_IN (seconds, default 900)
+  JWT_REFRESH_EXPIRES_IN (seconds, default 2592000)
 
-JWT/Auth configuration (planned)
-- JWT_ACCESS_SECRET (required)
-- JWT_ACCESS_EXPIRES_IN (default 900)
-- JWT_REFRESH_EXPIRES_IN (default 2592000)
-- JWT_ISSUER (default smartdesk)
-- JWT_AUDIENCE (default smartdesk-pwa)
-- AUTH_REFRESH_ROTATE (default true)
-- AUTH_MAX_LOGIN_ATTEMPTS (default 5)
-- AUTH_LOGIN_WINDOW_SEC (default 900)
+API endpoints
+- POST /api/auth/signup: { email, password } -> 201 Created
+- POST /api/auth/login: { email, password } -> 200 { accessToken, refreshToken, tokenType, expiresIn, user }
 
-Running the API locally
-- Ensure PostgreSQL is running and migration applied
-- Set env variables (example):
-  export PGHOST=127.0.0.1
-  export PGPORT=5432
-  export PGUSER=postgres
-  export PGPASSWORD=yourpass
-  export PGDATABASE=smartdesk
-- Start server:
-  npm install
-  npm start
-- Healthcheck: GET http://localhost:3000/health
-- Signup: POST http://localhost:3000/api/auth/signup
-  Body JSON: { "email": "user@example.com", "password": "Str0ng!Passw0rd" }
+Testing
+- jest + supertest + pg-mem. Run: npm test
 
-Errors
-- 400: invalid input (email/password)
-- 409: email already registered
-- 500: internal server error
-
-License
-- Internal demo artifacts

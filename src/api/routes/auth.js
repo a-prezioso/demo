@@ -5,6 +5,7 @@ const router = express.Router();
 
 const { passwordService, validationService } = require("../../security");
 const db = require("../../db");
+const { login } = require("../services/authService");
 
 // Helper to safely send error responses
 function sendBadRequest(res, message) {
@@ -78,6 +79,33 @@ router.post("/signup", async (req, res) => {
   } finally {
     const durationMs = Date.now() - startedAt;
     console.log(JSON.stringify({ level: "info", msg: "signup_request", duration_ms: durationMs, at: nowIso() }));
+  }
+});
+
+// Login endpoint
+router.post("/login", async (req, res) => {
+  const startedAt = Date.now();
+  try {
+    const { email, password } = req.body || {};
+    if (email == null || password == null) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const ua = req.headers["user-agent"] || null;
+    const ip = req.ip || req.connection?.remoteAddress || null;
+
+    const result = await login({ email, password, userAgent: ua, ip });
+    if (!result.ok) {
+      return res.status(result.code).json({ error: result.error });
+    }
+
+    return res.status(200).json(result.data);
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", msg: "login unexpected error", err: err.message }));
+    return res.status(500).json({ error: "Internal server error" });
+  } finally {
+    const durationMs = Date.now() - startedAt;
+    console.log(JSON.stringify({ level: "info", msg: "login_request", duration_ms: durationMs, at: nowIso() }));
   }
 });
 
