@@ -10,16 +10,58 @@ import type { RequestLike, ResponseLike } from './auth.controller';
 import type { AuthenticatedRequestLike } from './jwt.middleware';
 import { findActiveSessionByHash, rotateSessionToken, revokeSessionById, revokeAllSessionsForUser } from '../../modules/sessions/session.repository';
 
+// Cookie name used to carry the refresh token when using HttpOnly cookies
+const REFRESH_COOKIE_NAME = 'refreshToken';
+
+function parseCookieHeader(cookieHeader: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!cookieHeader || typeof cookieHeader !== 'string') return out;
+  const parts = cookieHeader.split(';');
+  for (const part of parts) {
+    const [k, ...v] = part.split('=');
+    if (!k) continue;
+    const key = k.trim();
+    const val = v.join('=').trim();
+    if (key) out[key] = decodeURIComponent(val || '');
+  }
+  return out;
+}
+
+function getRefreshTokenFromRequest(req: RequestLike): string | null {
+  const anyReq: any = req as any;
+  // 1) Explicit body param (fallback)
+  const fromBody = anyReq?.body?.refreshToken;
+  if (typeof fromBody === 'string' && fromBody) return fromBody;
+
+  // 2) Cookie bag (frameworks often populate req.cookies)
+  const fromCookiesBag = anyReq?.cookies?.[REFRESH_COOKIE_NAME];
+  if (typeof fromCookiesBag === 'string' && fromCookiesBag) return fromCookiesBag;
+
+  // 3) Cookie header parsing (HttpOnly cookie usage)
+  const headers = anyReq?.headers || {};
+  const cookieHeader = headers['cookie'] || headers['Cookie'];
+  if (typeof cookieHeader === 'string') {
+    const parsed = parseCookieHeader(cookieHeader);
+    if (parsed[REFRESH_COOKIE_NAME]) return parsed[REFRESH_COOKIE_NAME];
+  }
+
+  // 4) Non-standard header support if needed
+  const fromHeader = headers['x-refresh-token'] || headers['X-Refresh-Token'];
+  if (typeof fromHeader === 'string' && fromHeader) return fromHeader;
+
+  return null;
+}
+
 export async function refreshHandler(req: RequestLike, res: ResponseLike): Promise<void> {
   try {
-    const { refreshToken } = (req.body || {}) as { refreshToken?: string };
+    const token = getRefreshTokenFromRequest(req);
 
-    if (!refreshToken || typeof refreshToken !== 'string') {
+    if (!token) {
       res.status(400).json({ error: 'invalid_input', details: { refreshToken: 'required' } });
       return;
     }
 
-    const verification = verifyJwt(refreshToken);
+    const verification = verifyJwt(token);
     if (!verification.valid || !verification.payload) {
       res.status(401).json({ error: 'invalid_token' });
       return;
@@ -31,7 +73,7 @@ export async function refreshHandler(req: RequestLike, res: ResponseLike): Promi
       return;
     }
 
-    const tokenHash = hashRefreshToken(refreshToken);
+    const tokenHash = hashRefreshToken(token);
     const session = await findActiveSessionByHash(tokenHash);
     if (!session) {
       // unknown, revoked or expired session associated with this token hash
@@ -81,14 +123,14 @@ export async function refreshHandler(req: RequestLike, res: ResponseLike): Promi
 
 export async function logoutHandler(req: RequestLike, res: ResponseLike): Promise<void> {
   try {
-    const { refreshToken } = (req.body || {}) as { refreshToken?: string };
-    if (!refreshToken || typeof refreshToken !== 'string') {
+    const token = getRefreshTokenFromRequest(req);
+    if (!token) {
       // To avoid leaking details, treat missing/invalid token as a no-op success for logout
       res.status(200).json({ ok: true });
       return;
     }
 
-    const tokenHash = hashRefreshToken(refreshToken);
+    const tokenHash = hashRefreshToken(token);
     try {
       const session = await findActiveSessionByHash(tokenHash);
       if (session) {
