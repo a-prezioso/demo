@@ -1,0 +1,36 @@
+// Prisma schema for SmartDesk Coworking - User model
+// Align with project's conventions: snake_case for DB, camelCase for TS.
+// Generator and datasource are templated, can be adjusted by environment.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String     @id @default(uuid()) @db.Uuid @map("id")
+  email                  String     @unique @db.VarChar(320) @map("email")
+  passwordHash           String     @db.VarChar(255) @map("password_hash")
+  passwordSalt           String?    @db.VarChar(255) @map("password_salt")
+  verificationToken      String?    @db.VarChar(255) @map("verification_token")
+  verificationExpiresAt  DateTime?  @map("verification_expires_at")
+  status                 UserStatus @default(ACTIVE) @map("status")
+  createdAt              DateTime   @default(now()) @map("created_at")
+  updatedAt              DateTime   @updatedAt @map("updated_at")
+
+  @@index([status], map: "idx_users_status")
+  @@index([createdAt], map: "idx_users_created_at")
+  @@map("users")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DISABLED
+  DELETED
+}
