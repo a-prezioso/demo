@@ -9,6 +9,7 @@ Paths
 - docs/auth_refresh_endpoint.md: Detailed refresh endpoint and middleware summary
 - docs/auth_flow_diagram.txt: High-level text diagram of auth flow
 - docs/frontend_auth_components.md: React components for login/signup (client-side)
+- docs/frontend_authentication.md: Frontend authentication architecture and token handling (PWA)
 - src/security: Security services (password hashing/verification and input validation)
 - src/api: Minimal HTTP API server exposing /api/auth/signup and /api/auth/login
 - src/db: Database client (pg)
@@ -29,34 +30,30 @@ Conventions
 Security services
 - passwordService: hashPassword(plain), verifyPassword(plain, hash)
 - validationService: validateEmail(email) -> {valid, email, error}; validatePassword(pwd) -> {valid, error}
-- jwtService: sign(payload[, {expiresInSeconds}]) -> { token, expiresIn }; verify(token) -> { valid, payload | error }
-  Config via env:
-  JWT_SECRET (HS256) or JWT_PUBLIC_KEY (for RS256 verify)
-  JWT_ISSUER (default smartdesk)
-  JWT_AUDIENCE (default smartdesk-clients)
-  JWT_ACCESS_EXPIRES_IN (seconds, default 900)
-  JWT_REFRESH_EXPIRES_IN (seconds, default 2592000)
+- jwtService: sign(payload[, {expiresInSeconds}]) -> { token, expiresIn } and verify(token) -> { valid, payload?, error }
 
-Auth APIs
-- POST /api/auth/signup
-- POST /api/auth/login
-- POST /api/auth/refresh
-- POST /api/auth/logout
+API endpoints
+- POST /api/auth/signup: registers user with valid email/password
+- POST /api/auth/login: validates credentials, returns { accessToken, refreshToken, expiresIn, tokenType }
+- POST /api/auth/refresh: refreshes access token (and optionally rotates refresh)
+- POST /api/auth/logout: revokes current session
+- GET /api/secure/profile: protected, requires Authorization: Bearer <access>
+- GET /api/secure/admin/metrics: protected, ADMIN role
 
-Protected APIs
-- GET /api/secure/profile (any authenticated user)
-- GET /api/secure/admin/metrics (ADMIN role)
-- GET /api/private/me, /api/private/admin/overview
+Frontend modules
+- Components: src/client/components/{AuthPage.jsx,LoginForm.jsx,SignupForm.jsx,ProtectedRoute.jsx,AppRouter.jsx}
+- Context: src/client/context/AuthContext.jsx (exposes user, isAuthenticated, login, signup, refresh, logout)
+- API client: src/client/api/authClient.js (login, signup, refresh, logout)
+- Storage: src/client/storage/tokenStorage.js (localStorage by default; can swap to sessionStorage)
+- Utils: src/client/utils/jwt.js (decode payload, isJwtExpired)
 
-Refresh token persistence
-- Implemented in src/api/repositories/refreshTokenRepository.js
-- Functions: createSession, findSessionWithUserByHash, touchLastUsed, revokeById, revokeByTokenHash, revokeAllForUser, cleanupExpired
-- Only token hashes are stored; raw tokens are never persisted or logged
+How tokens are stored and used (summary)
+- Access token: stored in localStorage (sd_access_token) with its expiry (sd_access_expires_at)
+- Refresh token: stored in localStorage (sd_refresh_token)
+- Requests to protected APIs must include Authorization: Bearer <accessToken>
+- logout clears all tokens from storage and resets the AuthContext state
+- See docs/frontend_authentication.md for detailed frontend token handling and route-guard snippets
 
-JWT and refresh flow documentation
-- See docs/auth_jwt.md for a complete overview: token formats, claims, lifetimes, middleware behavior, endpoint specs, and examples.
-- See docs/auth_refresh_endpoint.md for a focused spec of POST /api/auth/refresh and middleware quick reference.
-- See docs/frontend_auth_components.md for instructions on integrating the client-side React components for login/signup.
-
-Maintenance
-- Schedule periodic cleanup of expired/old revoked refresh tokens using cleanupExpired({ retentionDays }).
+Development
+- Run tests: npm test
+- Start server: npm start
