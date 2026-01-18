@@ -1,0 +1,41 @@
+// Prisma schema for SmartDesk Coworking backend
+// Defines the User model aligned with project conventions
+// DB: PostgreSQL
+
+// Generator and datasource are placeholders, to be completed when wiring Prisma CLI
+// They allow editors to understand the schema and generate types when tooling is added.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Example: postgresql://user:password@localhost:5432/smartdesk
+  url      = env("DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  DISABLED
+}
+
+model User {
+  id                     String         @id @default(uuid()) @db.Uuid @map("id")
+  email                  String         @unique(map: "uq_users_email") @db.VarChar(320) @map("email")
+  passwordHash           String         @db.VarChar(255) @map("password_hash")
+  // If hashing library embeds salt in the hash (e.g., bcrypt), this can stay NULL
+  salt                   String?        @db.VarChar(255) @map("salt")
+  status                 AccountStatus  @default(ACTIVE) @map("status")
+  verificationToken      String?        @db.VarChar(128) @map("verification_token")
+  verificationExpiresAt  DateTime?      @map("verification_expires_at")
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
+
+  @@index([status], map: "idx_users_status")
+  @@index([createdAt], map: "idx_users_created_at")
+  @@index([verificationToken], map: "idx_users_verification_token")
+  @@map("users")
+}
