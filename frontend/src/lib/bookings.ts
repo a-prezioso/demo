@@ -1,26 +1,16 @@
-import { apiFetch } from './api';
+import { postJson } from './api';
 
 export interface CreateBookingPayload {
   deskId: string;
-  date: string; // ISO date or yyyy-mm-dd
-  timeSlot?: string | null;
+  date: string; // YYYY-MM-DD
+  timeSlot?: string;
 }
 
 export interface BookingResponse {
   id: string;
-  deskId: string;
-  date: string;
-  timeSlot?: string | null;
-  status?: string;
+  status: 'CONFIRMED' | 'PENDING' | 'CANCELLED';
 }
 
-export async function createBooking(payload: CreateBookingPayload, token?: string, baseUrl = '') {
-  // Convention: backend returns { success: true, data: {...} }
-  const res = await apiFetch<{ success?: boolean; data?: BookingResponse } | BookingResponse>(`${baseUrl}/api/bookings`, {
-    method: 'POST',
-    body: payload,
-    token,
-  });
-  if ((res as any)?.data) return (res as any).data as BookingResponse;
-  return res as BookingResponse;
+export async function createBooking(baseUrl: string, payload: CreateBookingPayload): Promise<BookingResponse> {
+  return postJson(`${baseUrl}/api/bookings`, payload);
 }

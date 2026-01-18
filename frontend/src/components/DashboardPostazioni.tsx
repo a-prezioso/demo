@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { fetchDesks, Desk, DeskStatus } from '../lib/desksApi';
+import { useDeskOverrides } from '../lib/desksState';
 
 const statusColor: Record<DeskStatus, string> = {
   FREE: '#22c55e',
@@ -7,10 +8,13 @@ const statusColor: Record<DeskStatus, string> = {
   UNAVAILABLE: '#9ca3af',
 };
 
-export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000, onSelect, overrideStatuses }: { baseUrl?: string; refreshMs?: number; onSelect?: (desk: Desk) => void; overrideStatuses?: Record<string, DeskStatus> }) {
+export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000, onSelect, overrideStatuses, selectedDate }: { baseUrl?: string; refreshMs?: number; onSelect?: (desk: Desk) => void; overrideStatuses?: Record<string, DeskStatus>; selectedDate?: Date | string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<Desk[]>([]);
+
+  // Centralized override state (real-time UI after booking)
+  const ctxOverrides = useDeskOverrides(selectedDate);
 
   const load = async () => {
     try {
@@ -38,7 +42,9 @@ export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000, onSelect,
   if (error) return <div role="alert">{error}</div>;
 
   const effectiveItems = items.map((d) => {
-    const status = overrideStatuses && overrideStatuses[d.id] ? overrideStatuses[d.id] : d.status;
+    const local = ctxOverrides[d.id];
+    const prop = overrideStatuses && overrideStatuses[d.id] ? overrideStatuses[d.id] : undefined;
+    const status = (prop || local || d.status) as DeskStatus;
     return { ...d, status } as Desk;
   });
 
@@ -53,7 +59,8 @@ export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000, onSelect,
           onClick={() => d.status === 'FREE' && onSelect?.(d)}
           disabled={d.status !== 'FREE'}
           aria-disabled={d.status !== 'FREE'}
-          aria-label={`Postazione ${d.name} ${d.status === 'FREE' ? 'disponibile' : 'non disponibile'}`}
+          aria-label={`Postazione ${d.name} ${d.status === 'FREE' ? 'disponibile' : d.status === 'OCCUPIED' ? 'prenotata' : 'non prenotabile'}`}
+          title={d.status === 'FREE' ? 'Disponibile' : d.status === 'OCCUPIED' ? 'Prenotata' : 'Non prenotabile'}
         >
           {d.name}
         </button>
