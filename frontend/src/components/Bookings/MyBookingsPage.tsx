@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { listMyBookings, type UserBookingItemDto } from '../../api/bookingsClient';
 import { sortBookings } from './sortUtils';
+import { BookingStatusBadge } from './BookingStatusBadge';
 
 export type MyBookingsPageProps = { baseUrl?: string };
 
@@ -65,7 +66,7 @@ export const MyBookingsPage: React.FC<MyBookingsPageProps> = ({ baseUrl = '/api'
               <strong>Data/ora:</strong> {formatDate(b.startDate)}
             </div>
             <div>
-              <strong>Stato:</strong> {b.status}
+              <strong>Stato:</strong> <BookingStatusBadge value={b.status} />
             </div>
           </li>
         ))}
