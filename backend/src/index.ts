@@ -10,3 +10,4 @@ export * from './security/validation.service';
 export * from './security/jwt.service';
 export * from './api/auth';
 export * from './db/client';
+export * from './api/auth/jwt.middleware';
