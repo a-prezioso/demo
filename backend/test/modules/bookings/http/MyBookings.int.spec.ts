@@ -4,7 +4,6 @@ import { JwtService } from '../../../../src/core/security/JwtService';
 import { registerBookingRoutes } from '../../../../src/modules/bookings/http/routes';
 import { InMemoryBookingRepository } from '../../../../src/modules/bookings/repository/BookingRepository';
 import { Booking } from '../../../../src/modules/bookings/domain/entities/Booking';
-import { jwtAuthGuard } from '../../../../src/modules/auth/http';
 
 function makeBooking(id: string, userId: string, startOffsetDays: number, durationHours: number, state: any): Booking {
   const now = new Date();
@@ -20,8 +19,8 @@ describe('My Bookings API - pagination and filters', () => {
   const app = express();
   app.use(express.json());
   const router = express.Router();
-  // Register routes with auth guard embedded in router
-  registerBookingRoutes(router, repo);
+  // Register routes with our jwt instance
+  registerBookingRoutes(router, repo, { jwt });
   app.use('/', router);
 
   // Helper to auth a request
@@ -85,7 +84,7 @@ describe('My Bookings API - pagination and filters', () => {
     const repo2 = new InMemoryBookingRepository();
     const app2 = express();
     const router2 = express.Router();
-    registerBookingRoutes(router2, repo2);
+    registerBookingRoutes(router2, repo2, { jwt });
     app2.use('/', router2);
 
     const e = await request(app2).get('/api/bookings/my?page=1&pageSize=10').set(auth('u3'));
