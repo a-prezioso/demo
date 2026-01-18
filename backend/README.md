@@ -34,7 +34,10 @@ Repository additions:
 - InMemoryUserRepository for development/testing
 - DuplicateEmailError to signal unique email violation from repository/DB layer
 
+Auth design documentation:
+- docs/authentication.md describes JWT-based login, token payload, TTLs, error cases, and sessions/refresh-token model
+- Added Prisma model Session and migration prisma/migrations/202601180002_auth_sessions
+
 To run locally (example):
 - Add a package.json with express and types, then ts-node/ts-node-dev for dev runs
 - Start server: ts-node src/server.ts (or compile with tsc if configured)
-
