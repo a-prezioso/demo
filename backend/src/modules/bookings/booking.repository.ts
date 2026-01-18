@@ -67,6 +67,12 @@ export async function findBookingByDeskAndDate(deskId: string, date: Date): Prom
   return res.rows[0] ? mapRow(res.rows[0]) : null;
 }
 
+export async function findBookingById(id: string): Promise<Booking | null> {
+  const sql = 'SELECT * FROM bookings WHERE id = $1 LIMIT 1';
+  const res = await query<DbBookingRow>(sql, [id]);
+  return res.rows[0] ? mapRow(res.rows[0]) : null;
+}
+
 export async function countUserBookingsOnDate(userId: string, date: Date): Promise<number> {
   const sql = 'SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1 AND date = $2';
   const res = await query<{ c: string }>(sql, [userId, date.toISOString().slice(0, 10)]);
@@ -157,4 +163,21 @@ export async function listUserBookings(
   });
 
   return { items, page, size, total };
+}
+
+export async function cancelBookingForUser(
+  bookingId: string,
+  userId: string,
+  todayIso?: string,
+): Promise<Booking | null> {
+  const today = todayIso || new Date().toISOString().slice(0, 10);
+  const sql = `
+    UPDATE bookings
+    SET state = $3, updated_at = NOW()
+    WHERE id = $1 AND user_id = $2 AND date >= $4
+    RETURNING *
+  `;
+  const res = await query<DbBookingRow>(sql, [bookingId, userId, 'CANCELLATA', today]);
+  if (!res.rows[0]) return null;
+  return mapRow(res.rows[0]);
 }
