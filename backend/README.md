@@ -12,6 +12,7 @@ Current scope
 - JWT service (HS256) with access/refresh token helpers
 - Login controller for issuing tokens
 - Migration for user_sessions table (refresh token tracking)
+- JWT auth middleware (authGuard) to protect reserved routes
 
 Notes
 - Email is stored as CITEXT and is unique (case-insensitive)
@@ -21,6 +22,7 @@ Notes
 - Do not log sensitive columns; use userForLog() utility and avoid logging password/hash entirely
 - The signup handler validates inputs, handles unique violations (409), and returns 201 with non-sensitive fields only.
 - Login handler validates credentials and returns access and refresh JWTs. Persist refresh token hash in user_sessions when wiring a DB-backed session service.
+- authGuard validates access tokens from Authorization header and sets req.user; missing/invalid -> 401, missing roles -> 403.
 
 JWT configuration
 - JWT_SECRET (required): HMAC secret key
@@ -32,6 +34,7 @@ JWT configuration
 Wiring the HTTP framework
 - This repo does not include Express/Fastify setup yet. The auth controller exposes signupHandler and loginHandler which can be mounted in a future task.
 - The `db/client.ts` expects a PostgreSQL connection via `DATABASE_URL` or PG* env vars.
+- To protect reserved APIs (e.g., /api/private/**), apply the authGuard middleware in your HTTP server. See docs/secure-routing.md for an example.
 
 Diagrams (high-level)
 Auth flow (login):

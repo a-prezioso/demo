@@ -122,6 +122,14 @@ export function authGuard(options?: AuthGuardOptions) {
       return respond(res, 401, 'unauthorized', 'invalid_token_type');
     }
 
+    // Additional iat check: reject tokens issued in the future
+    if (typeof ver.payload.iat === 'number') {
+      const now = Math.floor(Date.now() / 1000);
+      if (ver.payload.iat > now) {
+        return respond(res, 401, 'unauthorized', 'invalid_iat');
+      }
+    }
+
     // Optional revocation check
     if (typeof opts.isRevoked === 'function') {
       try {
