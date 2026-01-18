@@ -127,7 +127,8 @@ export async function listUserBookings(
   opts?: ListUserBookingsOptions,
 ): Promise<PagedResult<UserBookingItemDto>> {
   const page = Math.max(1, Math.floor(opts?.page || 1));
-  const size = Math.min(100, Math.max(1, Math.floor(opts?.size || 20)));
+  const sizeRaw = Math.floor(opts?.size || 20);
+  const size = Math.min(100, Math.max(1, sizeRaw));
   const offset = (page - 1) * size;
 
   // Determine today (UTC date)

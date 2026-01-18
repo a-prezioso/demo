@@ -125,10 +125,23 @@ export async function listMyBookingsHandler(req: AuthenticatedRequestLike & { qu
     res.status(401).json({ error: 'unauthorized' });
     return;
   }
-  const page = Number((req as any)?.query?.page || 1);
-  const size = Number((req as any)?.query?.size || 20);
+
+  // Read pagination with validation and aliases (size | pageSize)
+  const pageRaw = (req as any)?.query?.page;
+  const sizeRaw = (req as any)?.query?.size ?? (req as any)?.query?.pageSize;
+  let page = Number(pageRaw);
+  let size = Number(sizeRaw);
+  if (!Number.isFinite(page) || page < 1) page = 1;
+  if (!Number.isFinite(size) || size < 1) size = 20;
+  // Clamp page size to sane bounds [1,100]
+  if (size > 100) size = 100;
+
   const includeCanceled = String((req as any)?.query?.includeCanceled || 'false') === 'true';
-  const stateParamRaw = String((req as any)?.query?.status || (req as any)?.query?.state || 'ALL').toUpperCase();
+
+  // Default status may be configured via env, fallback to 'ALL'
+  const defaultStatus = String((process as any)?.env?.BOOKINGS_DEFAULT_STATUS || 'ALL').toUpperCase();
+  const rawStatus = (req as any)?.query?.status ?? (req as any)?.query?.state ?? defaultStatus;
+  const stateParamRaw = String(rawStatus || defaultStatus).toUpperCase();
   const allowedStates = ['ALL', 'ATTIVA', 'PASSATA', 'CANCELLATA'];
   const stateParam = allowedStates.includes(stateParamRaw) ? (stateParamRaw as any) : 'ALL';
 
@@ -144,10 +157,12 @@ export async function listMyBookingsHandler(req: AuthenticatedRequestLike & { qu
     });
 
     const totalPages = Math.max(1, Math.ceil((result.total || 0) / result.size));
-    const hasNext = page < totalPages;
-    const hasPrevious = page > 1 && result.total > 0;
+    const hasNext = result.page < totalPages;
+    const hasPrevious = result.page > 1 && result.total > 0;
 
+    // Backward-compatible fields (page/size/total) + new, explicit metadata
     res.status(200).json({
+      // legacy
       page: result.page,
       size: result.size,
       total: result.total,
@@ -155,6 +170,11 @@ export async function listMyBookingsHandler(req: AuthenticatedRequestLike & { qu
       hasNext,
       hasPrevious,
       items,
+      // new explicit meta
+      currentPage: result.page,
+      pageSize: result.size,
+      totalItems: result.total,
+      status: stateParam,
     });
   } catch (_e) {
     res.status(500).json({ error: 'internal_error' });
