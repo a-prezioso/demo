@@ -7,5 +7,6 @@ export * from './modules/users/user.model';
 export * from './modules/users/user.repository';
 export * from './security/password.service';
 export * from './security/validation.service';
+export * from './security/jwt.service';
 export * from './api/auth';
 export * from './db/client';

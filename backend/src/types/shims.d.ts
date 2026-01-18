@@ -5,10 +5,13 @@
 declare var process: any;
 declare function require(name: string): any;
 
+declare const Buffer: any;
+
 declare module 'argon2';
 declare module 'bcrypt';
 declare module 'bcryptjs';
 declare module 'pg';
+declare module 'crypto';
 
 declare module 'ts-jest';
 
