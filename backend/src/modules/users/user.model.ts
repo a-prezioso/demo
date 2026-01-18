@@ -31,6 +31,11 @@ export interface User {
   status: UserStatus;
   verificationToken?: string | null; // optional: for future email verification
   verificationExpiresAt?: Date | null; // optional expiry for verification token
+  // Profile fields (optional)
+  firstName?: string | null;
+  lastName?: string | null;
+  avatarUrl?: string | null;
+  avatarId?: string | null;
 }
 
 /**
