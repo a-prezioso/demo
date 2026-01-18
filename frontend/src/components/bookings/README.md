@@ -1,17 +1,12 @@
-MyBookings - Cancellation UX
+# Bookings components
 
-Scope
-- Provide a cancellazione azione nella pagina "Le Mie Prenotazioni" con rispetto vincolo 24h.
+This folder contains components related to bookings, including MyBookings and BookingList.
 
-Key points
-- Usa isBookingCancellable per pre-check client (non autoritativo).
-- Conferma tramite window.confirm (può essere sostituito con modal UI lib).
-- Chiamata POST /api/bookings/:id/cancel via cancelBooking helper.
-- Gestione errori: se backend risponde con code BOOKING_CANCELLATION_WINDOW, mostra messaggio localizzato che ricorda le 24 ore.
-- Aggiorna la lista in memoria senza ricaricare la pagina. onRefresh callback opzionale per refetch esterno.
+Testing and accessibility notes
+- MyBookings exposes basic ARIA roles and labels for tabs (Attive, Passate, Cancellate) and pagination controls (Indietro, Avanti) to facilitate both manual and automated tests.
+- A manual test checklist is available at ../../test/manual/my-bookings-checklist.md (frontend/test/manual/my-bookings-checklist.md from repo root).
+- An E2E testing plan and Playwright examples are documented in ../../README-e2e.md.
 
-Accessibility
-- Button con aria-label specifico per ogni prenotazione.
-
-Mobile/Desktop
-- Stili inline minimi responsivi. Integrare con design system del portale se disponibile.
+Enabling E2E and integration tests
+- Install @playwright/test or cypress and add scripts in frontend/package.json.
+- Align selectors with the ARIA roles used in MyBookings.
