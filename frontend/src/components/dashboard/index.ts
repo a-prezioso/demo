@@ -1,2 +1,5 @@
-export { DashboardPostazioni } from './DashboardPostazioni';
-export type { Desk, DeskStatus, DashboardPostazioniProps } from './DashboardPostazioni';
+export * from './Dashboard';
+export * from './DashboardPostazioni';
+export * from './types';
+export * from './styles';
+export * from './DeskMapView';
