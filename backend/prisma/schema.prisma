@@ -99,6 +99,11 @@ model Booking {
   timeSlot   String?       @map("time_slot") @db.VarChar(50)
   status     BookingStatus @default(CONFIRMED)
   state      BookingState  @default(ATTIVA) @map("state")
+  startAt    DateTime?     @map("start_at")
+  endAt      DateTime?     @map("end_at")
+  canceledAt DateTime?     @map("canceled_at")
+  cancellationReason String? @map("cancellation_reason") @db.VarChar(255)
+  canceledBy String?       @map("canceled_by") @db.VarChar(50)
   createdAt  DateTime      @default(now()) @map("created_at")
   updatedAt  DateTime      @updatedAt @map("updated_at")
 
@@ -109,6 +114,8 @@ model Booking {
   @@index([userId], map: "idx_bookings_user_id")
   @@index([date], map: "idx_bookings_date")
   @@index([state], map: "idx_bookings_state")
+  @@index([startAt], map: "idx_bookings_start_at")
+  @@index([canceledAt], map: "idx_bookings_canceled_at")
 }
 
 // Coworking closures configuration
