@@ -6,6 +6,8 @@ Paths
 - db/migrations: SQL migrations (PostgreSQL)
 - docs/user_model.md: User model documentation
 - src/security: Security services (password hashing/verification and input validation)
+- src/api: Minimal HTTP API server exposing /api/auth/signup
+- src/db: Database client (pg)
 
 Applying the migration (PostgreSQL)
 - Requires extensions: citext, pgcrypto
@@ -32,6 +34,26 @@ Security services
   SECURITY_PASSWORD_REQUIRE_NUMBER (true)
   SECURITY_PASSWORD_REQUIRE_SYMBOL (true)
   SECURITY_PASSWORD_FORBID_COMMON (true)
+
+Running the API locally
+- Ensure PostgreSQL is running and migration applied
+- Set env variables (example):
+  export PGHOST=127.0.0.1
+  export PGPORT=5432
+  export PGUSER=postgres
+  export PGPASSWORD=yourpass
+  export PGDATABASE=smartdesk
+- Start server:
+  npm install
+  npm start
+- Healthcheck: GET http://localhost:3000/health
+- Signup: POST http://localhost:3000/api/auth/signup
+  Body JSON: { "email": "user@example.com", "password": "Str0ng!Passw0rd" }
+
+Errors
+- 400: invalid input (email/password)
+- 409: email already registered
+- 500: internal server error
 
 License
 - Internal demo artifacts
