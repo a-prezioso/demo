@@ -3,15 +3,13 @@ import type { Config } from 'jest';
 const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
-  roots: ['<rootDir>/src'],
+  rootDir: '.',
+  testMatch: ['<rootDir>/src/**/*.spec.tsx', '<rootDir>/src/**/*.spec.ts', '<rootDir>/src/**/*.test.tsx', '<rootDir>/src/**/*.test.ts'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
-  setupFilesAfterEnv: ['<rootDir>/src/test/setupTests.ts'],
   transform: {
-    '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
+    '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: { target: 'ES2020', module: 'commonjs', jsx: 'react-jsx' } }],
   },
-  moduleNameMapper: {
-    '\\.(css|less|scss|sass)$': '<rootDir>/src/test/styleMock.ts',
-  },
+  setupFilesAfterEnv: ['@testing-library/jest-dom'],
 };
 
 export default config;
