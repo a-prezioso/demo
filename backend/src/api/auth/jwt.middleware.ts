@@ -43,6 +43,8 @@ export interface AuthGuardOptions {
   isRevoked?: (payload: JwtPayload, token: string) => boolean | Promise<boolean>;
   // If true, attach full payload to req.auth (default: true)
   attachPayload?: boolean;
+  // Allow refresh tokens for this guard (default: false). Typically only access tokens are accepted.
+  allowRefresh?: boolean;
 }
 
 function getAuthorizationHeader(req: any): string | undefined {
@@ -90,11 +92,13 @@ function mapVerifyErrorToResponse(err?: string): { code: number; error: string; 
 }
 
 export function authGuard(options?: AuthGuardOptions) {
-  const opts: Required<Pick<AuthGuardOptions, 'required' | 'attachPayload'>> & AuthGuardOptions = {
-    required: options?.required ?? true,
-    attachPayload: options?.attachPayload ?? true,
-    ...options,
-  };
+  const opts: Required<Pick<AuthGuardOptions, 'required' | 'attachPayload' | 'allowRefresh'>> &
+    AuthGuardOptions = {
+      required: options?.required ?? true,
+      attachPayload: options?.attachPayload ?? true,
+      allowRefresh: options?.allowRefresh ?? false,
+      ...options,
+    };
 
   return async function middleware(req: AuthenticatedRequestLike, res: ResponseLike, next: NextLike) {
     const token = extractBearerToken(req);
@@ -110,6 +114,12 @@ export function authGuard(options?: AuthGuardOptions) {
     if (!ver.valid || !ver.payload) {
       const mapped = mapVerifyErrorToResponse(ver.error);
       return respond(res, mapped.code, mapped.error, mapped.message);
+    }
+
+    // Reject refresh tokens by default unless explicitly allowed
+    const typ = (ver.payload as any).typ;
+    if (!opts.allowRefresh && typ === 'refresh') {
+      return respond(res, 401, 'unauthorized', 'invalid_token_type');
     }
 
     // Optional revocation check
