@@ -32,7 +32,7 @@ describe('InMemoryBookingsRepository.findByUserOrdered', () => {
     expect(res.total).toBe(6);
   });
 
-  it('handles same date/time with tie-breakers stable by status then id', async () => {
+  it('handles same date/time with tie-breakers: status (lex) then id', async () => {
     const seed2: Booking[] = [
       { id: 'a', userId: uidA, deskId: 'D1', date: '2025-06-20', timeSlot: '10:00', status: 'PENDING' },
       { id: 'b', userId: uidA, deskId: 'D1', date: '2025-06-20', timeSlot: '10:00', status: 'CONFIRMED' },
@@ -40,8 +40,8 @@ describe('InMemoryBookingsRepository.findByUserOrdered', () => {
     ];
     const repo = new InMemoryBookingsRepository(seed2);
     const res = await repo.findByUserOrdered(uidA, { now });
-    // Same bucket (future), same key -> order by status lexicographically then id
-    expect(res.items.map((b) => b.id)).toEqual(['b', 'c', 'a']); // CANCELLED < CONFIRMED < PENDING lex order, but actually C < C < P: among C*, b before c by id
+    // Lex order: CANCELLED < CONFIRMED < PENDING
+    expect(res.items.map((b) => b.id)).toEqual(['c', 'b', 'a']);
   });
 
   it('only future bookings', async () => {
