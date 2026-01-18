@@ -1,8 +1,8 @@
 import React from 'react';
-import { DesksStateProvider } from './lib/desksState';
+import { SelectedDateProvider } from './lib/date/SelectedDateContext';
 
-export const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <DesksStateProvider>{children}</DesksStateProvider>;
+const AppProviders: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  return <SelectedDateProvider>{children}</SelectedDateProvider>;
 };
 
 export default AppProviders;

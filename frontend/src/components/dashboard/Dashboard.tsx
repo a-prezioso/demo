@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { Desk, DeskStatus } from './types';
 import { DashboardStyles } from './styles';
+import { useSelectedDate } from '../../lib/date/SelectedDateContext';
 
 // Minimal, presentational component to validate the structure and interactions (no data wiring)
 export interface DashboardProps {
@@ -21,11 +22,20 @@ export function Dashboard({ desks = DEFAULT_DESKS, onRefresh, onBook }: Dashboar
 
   const selectedDesk = items.find((d) => d.id === selected) || null;
 
+  const { date, setDate, resetToToday } = useSelectedDate();
+
   return (
     <div className="sd-dashboard" data-mode={selected ? 'detail' : 'grid'}>
       <header className="sd-header">
         <h1 className="sd-title">Postazioni</h1>
         <div className="sd-actions">
+          <input
+            aria-label="Seleziona data"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+          <button className="sd-btn" onClick={resetToToday}>Oggi</button>
           <button className="sd-btn sd-btn-refresh" aria-label="Aggiorna" onClick={onRefresh}>
             ⟳
           </button>
