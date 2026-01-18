@@ -10,6 +10,7 @@ const config: Config = {
   collectCoverageFrom: [
     'src/lib/**/*.{ts,tsx}',
     'src/components/auth/**/*.{ts,tsx}',
+    'src/components/profile/**/*.{ts,tsx}',
     '!src/**/index.ts'
   ],
   coverageThreshold: {
