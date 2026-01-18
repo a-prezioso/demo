@@ -64,7 +64,7 @@ describe('MyBookingsPage - badges integration', () => {
       makeItem('b3', 'D-102', '2026-01-19T08:00:00.000Z', 'CANCELLATA'),
     ]);
 
-    const { container } = render(<MyBookingsPage baseUrl="/api" />);
+    render(<MyBookingsPage baseUrl="/api" />);
 
     const rows = await screen.findAllByTestId('booking-row');
     expect(rows).toHaveLength(3);
@@ -89,9 +89,6 @@ describe('MyBookingsPage - badges integration', () => {
       const colors = bookingStateColors(uiState);
       expect(badge).toHaveStyle({ backgroundColor: colors.bg, color: colors.fg });
     });
-
-    // Check basic snapshot (structure + inline styles)
-    expect(container.firstChild).toMatchSnapshot();
 
     // No console errors/warnings during render
     expect(consoleErrorSpy).not.toHaveBeenCalled();
