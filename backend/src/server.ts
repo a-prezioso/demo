@@ -8,6 +8,7 @@ import { refreshRouter } from './modules/auth/interfaces/http/refreshRoutes';
 import { logger } from './core/logging/logger';
 import { requireAuth, requireRoles } from './core/jwt/authMiddleware';
 import { JwtService } from './core/jwt/jwtService';
+import { profileRouter } from './modules/user/interfaces/http/profileRoutes';
 
 const app = express();
 app.use(express.json());
@@ -16,6 +17,9 @@ app.use(express.json());
 app.use('/api/auth', authRouter);
 app.use('/api/auth', loginRouter);
 app.use('/api/auth', refreshRouter);
+
+// Profile routes
+app.use('/api', profileRouter);
 
 // Protected API group: apply JWT middleware to all /api/private/**
 const jwt = new JwtService();
