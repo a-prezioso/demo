@@ -28,86 +28,41 @@ Data model (stored client-side)
 - Storage key: demo.auth.state (localStorage)
 - Session restore: AuthProvider initializes its state from tokenStorage.getAuthState() at mount and keeps it in sync via setAuthState().
 
-Where and how tokens are stored
-- Current implementation stores tokens in localStorage (persistent across tabs and browser restarts).
-- Security implications:
-  - Pros: Simple to implement, survives reloads.
-  - Cons: Exposed to JavaScript; vulnerable to XSS exfiltration. Mitigate with strong CSP, input sanitization, no inline scripts, dependency hygiene.
-- Alternatives (future):
-  - sessionStorage for per-tab isolation (cleared on tab close).
-  - HttpOnly, Secure, SameSite cookies for refresh token to minimize XSS token theft (recommended). Access token can remain in memory only.
+Where and how tokens are used
+- API clients attach Authorization: Bearer <accessToken> for protected endpoints.
+- Refresh flow is currently backend-driven; frontend can call /auth/refresh when needed.
 
-How tokens are attached to API requests
-- Login/Signup endpoints do not require Authorization header.
-- For subsequent authenticated API calls, read the accessToken from AuthContext or tokenStorage and set header:
-  - Authorization: Bearer <accessToken>
-- Example (vanilla fetch):
-  - const state = getAuthState();
-  - const res = await fetch('/api/private/resource', { headers: { 'Authorization': `Bearer ${state.accessToken}` }});
-- Note: There is no global HTTP client interceptor in this codebase yet; each call should attach the token explicitly or through a future shared http client.
+---
 
-Login flow (sequence)
-1) User submits email/password in AuthPage.
-2) useAuth.login -> AuthContext.login -> authService.login.
-3) authService.login calls API POST /api/auth/login via authClient.login.
-4) Backend returns accessToken, refreshToken, user, expiries.
-5) authService persists them in tokenStorage (localStorage) and returns the new StoredAuthState.
-6) AuthContext updates in-memory state and triggers onLoginSuccess (optional), enabling navigation to protected areas.
+Desks dashboard integration
 
-Signup flow (sequence)
-1) User submits email/password in AuthPage (mode=signup).
-2) useAuth.signup -> AuthContext.signup -> authService.signup.
-3) authService.signup calls API POST /api/auth/signup via authClient.signup.
-4) On success (201), UI can optionally auto-switch to login or prompt the user to login. No tokens are stored by signup itself.
+Overview
+- The DashboardPage renders a 12-desk interactive map with colors by status.
+- A centralized API client fetches the current desk states from the backend and the component updates reactively.
 
-Logout flow
-- AuthContext.logout calls tokenStorage.clearAuthState(), resets state to { isAuthenticated: false, user: null }, and triggers onLogout (optional).
-- Side effects: accessToken and refreshToken are removed from localStorage.
-- Backend session revocation: not automatic in the current frontend. If required, call POST /api/auth/logout forwarding the refreshToken, then clear local state.
+Files
+- API client: frontend/src/api/desksClient.ts
+  - export fetchDeskStatuses({ baseUrl, signal }) -> Promise<DeskStatusItem[]>
+  - Automatically attaches Authorization header from tokenStorage.
+  - Maps heterogeneous backend status values (e.g., available/occupied/libero/…) to the canonical frontend enum: 'free' | 'busy' | 'unavailable'.
+  - Normalizes payload format, accepting arrays or objects like { desks: [...] } / { items: [...] }.
+- Hook: frontend/src/components/Dashboard/useDesksData.ts
+  - Manages data lifecycle (initial load + polling every 30s by default), debouncing concurrent requests and cancelling in-flight fetch on unmount.
+  - Exposes { desks, loading, error, lastUpdated, refresh }.
+- Component: frontend/src/components/Dashboard/DashboardPage.tsx
+  - Uses useDesksData to render the map; shows error banner with manual retry button.
+  - Accepts props: baseUrl, pollingMs for tuning.
 
-Adding protected routes
-- Wrap route elements with ProtectedRoute so that only authenticated users can access them.
-- Example (React Router v6 style):
-  - <AuthProvider baseUrl="/api">
-  -   <Routes>
-  -     <Route path="/login" element={<AuthPage />} />
-  -     <Route path="/dashboard" element={
-  -       <ProtectedRoute>
-  -         <Dashboard />
-  -       </ProtectedRoute>
-  -     } />
-  -   </Routes>
-  - </AuthProvider>
-- ProtectedRoute should read from AuthContext and redirect to /login (or render a fallback) when state.isAuthenticated is false.
+Backend endpoint expectation
+- GET /api/desks/status returns JSON with an array of desk states, either as plain array or wrapped (e.g., { desks: [...] }).
+- Each item: { id: string; status: 'free' | 'busy' | 'unavailable' | vendor-specific }.
+- Optional fields: name, x, y; if provided, they override default layout values on the client.
 
-Configuration
-- Base API URL: pass baseUrl to AuthProvider and useAuth (defaults to '/api'). Ensure backend is reachable at the same origin or handle CORS accordingly.
-- Backend expectations:
-  - POST /api/auth/signup: { email, password } -> { user }
-  - POST /api/auth/login: { email, password } -> { accessToken, refreshToken, tokenType, user, ... }
-  - Other protected endpoints expect Authorization: Bearer <accessToken>.
+Polling and cancellation
+- The hook sets up a setInterval at the chosen pollingMs (default 30000 ms).
+- If a request is still pending when the interval ticks, the next fetch is skipped to avoid piling up.
+- On unmount or dependency change, the in-flight request is aborted via AbortController.
 
-Error handling
-- AuthContext exposes loading and error. AuthPage shows simple client-side validation and displays error codes from thrown API errors.
-- API client (frontend/src/api/authClient.ts) throws on non-2xx and sets error message based on payload.error when present.
+Error handling and retry
+- Network errors are captured and surfaced via error string; an alert is displayed with a "Riprova" button that triggers a manual refresh.
 
-Security notes and best practices
-- Never log tokens or sensitive user data.
-- Prefer keeping access token lifetime short and perform refresh with rotation.
-- Consider storing refresh token in HttpOnly+Secure cookie (server-set) to mitigate XSS, while keeping access token in memory only.
-- Add a Content Security Policy (CSP) and avoid dangerous sinks (innerHTML).
-- On 401/403 from protected API calls, trigger automatic logout or silent refresh depending on backend behavior.
-
-Known limitations / TODO
-- Implement centralized HTTP client with:
-  - Authorization header injection based on current AuthContext/tokenStorage
-  - Automatic access token refresh on 401/expired, using refresh token rotation
-  - Request queuing during refresh, failure fallback to logout
-- Store refresh token in HttpOnly cookie instead of localStorage when backend supports it; keep only non-sensitive state client-side.
-- Implement token expiry checks (decode JWT exp) and proactive refresh before expiry or auto-logout when exp passed.
-- Cross-tab sync: listen to storage events to propagate login/logout across tabs.
-- Backend integration for logout/logoutAll endpoints to revoke refresh sessions.
-
-Troubleshooting
-- After changing auth behavior, clear browser storage for key demo.auth.state.
-- Ensure JWT_SECRET and related backend env vars are configured; frontend relies on backend to issue valid tokens.

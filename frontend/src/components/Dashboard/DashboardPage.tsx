@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import ProtectedRoute from '../../router/ProtectedRoute';
+import { useDesksData } from './useDesksData';
 
 export type DeskStatus = 'free' | 'busy' | 'unavailable';
 
@@ -16,6 +17,7 @@ export type DashboardPageProps = {
   desks?: Desk[]; // opzionale per injection/test; se assente usare layout demo
   onRefresh?: () => Promise<void> | void; // hook refresh esterno
   onBook?: (deskId: string) => void; // callback per aprire pagina prenotazione
+  pollingMs?: number; // intervallo aggiornamento periodico
 };
 
 export const defaultDesks: Desk[] = [
@@ -38,10 +40,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   desks,
   onRefresh,
   onBook,
+  pollingMs,
 }) => {
   const [selected, setSelected] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const items = desks || defaultDesks;
+
+  // Integrate with backend via hook; if desks prop provided, keep using it (e.g., tests)
+  const { desks: liveDesks, loading, error, lastUpdated, refresh } = useDesksData({
+    baseUrl,
+    pollingMs: pollingMs ?? 30000,
+  });
+
+  const items = desks || liveDesks || defaultDesks;
 
   const counts = useMemo(() => {
     return items.reduce(
@@ -55,10 +64,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
   async function handleRefresh() {
     try {
-      setLoading(true);
+      await refresh();
       await onRefresh?.();
-    } finally {
-      setLoading(false);
+    } catch (_) {
+      // error is already set by hook; noop
     }
   }
 
@@ -68,15 +77,29 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     <div style={styles.page}>
       <header style={styles.header}>
         <h1 style={styles.title}>Mappa postazioni</h1>
-        <button
-          aria-label="Aggiorna"
-          onClick={handleRefresh}
-          disabled={loading}
-          style={styles.refresh}
-        >
-          {loading ? '⏳' : '↻'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {lastUpdated && (
+            <span style={styles.subtle} aria-live="polite">
+              Aggiornato {formatRelative(lastUpdated)}
+            </span>
+          )}
+          <button
+            aria-label="Aggiorna"
+            onClick={handleRefresh}
+            disabled={loading}
+            style={styles.refresh}
+          >
+            {loading ? '⏳' : '↻'}
+          </button>
+        </div>
       </header>
+
+      {error && (
+        <div role="alert" style={styles.errorBox}>
+          <span>Errore di rete: {error}</span>
+          <button onClick={handleRefresh} style={styles.retryBtn}>Riprova</button>
+        </div>
+      )}
 
       <main style={styles.main}>
         <div style={styles.mapWrap}>
@@ -175,7 +198,7 @@ const DetailsSheet: React.FC<{
           {symbolFor(desk.status)} {a11yStatus(desk.status)}
         </div>
         <h2 style={styles.sheetTitle}>{desk.name}</h2>
-        <p style={styles.sheetSub}>Ultimo aggiornamento: appena ora</p>
+        <p style={styles.sheetSub}>Ultimo aggiornamento: {formatRelative(new Date())}</p>
         <div style={styles.sheetActions}>
           <button
             style={{ ...styles.primaryBtn, opacity: canBook ? 1 : 0.6 }}
@@ -208,6 +231,15 @@ function getColor(s: DeskStatus): { bg: string; border: string; fore: string } {
   }
 }
 
+function formatRelative(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  if (diff < 10000) return 'ora';
+  if (diff < 60000) return `${Math.floor(diff / 1000)}s fa`;
+  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)}m fa`;
+  const d = new Date(date);
+  return d.toLocaleTimeString();
+}
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     '--desk-free': '#16a34a',
@@ -232,11 +264,32 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: '1px solid #e5e7eb',
   },
   title: { fontSize: 18, margin: 0 },
+  subtle: { color: '#64748b', fontSize: 12 } as React.CSSProperties,
   refresh: {
     border: '1px solid #cbd5e1',
     background: '#f8fafc',
     borderRadius: 6,
     padding: '8px 10px',
+    cursor: 'pointer',
+  },
+  errorBox: {
+    margin: '8px 12px',
+    padding: '8px 10px',
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: 8,
+    color: '#7f1d1d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  retryBtn: {
+    background: '#fee2e2',
+    color: '#7f1d1d',
+    border: '1px solid #fecaca',
+    borderRadius: 6,
+    padding: '6px 10px',
     cursor: 'pointer',
   },
   main: { padding: 12 },
