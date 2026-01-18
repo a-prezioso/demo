@@ -4,6 +4,7 @@
 
 import { query } from '../../db/client';
 import type { Booking, BookingStatus, BookingState } from './booking.model';
+import { computeBookingState } from './booking.state.service';
 
 interface DbBookingRow {
   id: string;
@@ -17,16 +18,23 @@ interface DbBookingRow {
 }
 
 function mapRow(row: DbBookingRow): Booking {
-  return {
+  const b: Booking = {
     id: row.id,
     userId: row.user_id,
     deskId: row.desk_id,
     date: new Date(`${row.date}T00:00:00.000Z`),
     status: (row.status as BookingStatus) || 'confirmed',
-    state: ((row as any).state as BookingState) || 'ATTIVA',
+    // Preserve DB state if any, otherwise compute on-the-fly
+    state: ((row as any).state as BookingState) || undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };
+
+  // If state is not persisted, compute it deterministically
+  if (!b.state) {
+    b.state = computeBookingState({ date: b.date });
+  }
+  return b;
 }
 
 export interface CreateBookingParams {
@@ -34,6 +42,7 @@ export interface CreateBookingParams {
   deskId: string;
   date: Date; // normalized date-only UTC
   status?: BookingStatus;
+  // Client must NOT control state; ignore any incoming value
 }
 
 export async function createBooking(params: CreateBookingParams): Promise<Booking> {
@@ -133,16 +142,19 @@ export async function listUserBookings(
   ]);
 
   const total = countRes.rows[0] ? parseInt((countRes.rows[0] as any).c, 10) : 0;
-  const items: UserBookingItemDto[] = dataRes.rows.map((r) => ({
-    id: r.id,
-    startDate: (r as any).date, // already YYYY-MM-DD from DB
-    endDate: null,
-    deskId: r.desk_id,
-    status: (r as any).status,
-    notes: null,
-    tags: null,
-    state: ((r as any).state as BookingState) || 'ATTIVA',
-  }));
+  const items: UserBookingItemDto[] = dataRes.rows.map((r) => {
+    const state = ((r as any).state as BookingState) || computeBookingState({ date: new Date(`${r.date}T00:00:00.000Z`) });
+    return {
+      id: r.id,
+      startDate: (r as any).date, // already YYYY-MM-DD from DB
+      endDate: null,
+      deskId: r.desk_id,
+      status: (r as any).status,
+      notes: null,
+      tags: null,
+      state,
+    };
+  });
 
   return { items, page, size, total };
 }
