@@ -5,6 +5,8 @@ export type UserBookingItemDto = {
   endDate: string | null; // null for date-only bookings
   deskId: string;
   status: string; // keep as string for UI
+  // New optional explicit booking state from backend (e.g., PASSATA | ATTIVA | CANCELLATA)
+  state?: string | null;
   notes?: string | null;
   tags?: string[] | null;
 };

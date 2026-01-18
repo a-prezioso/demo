@@ -66,7 +66,9 @@ export const MyBookingsPage: React.FC<MyBookingsPageProps> = ({ baseUrl = '/api'
               <strong>Data/ora:</strong> {formatDate(b.startDate)}
             </div>
             <div>
-              <strong>Stato:</strong> <BookingStatusBadge value={b.status} />
+              <strong>Stato:</strong>{' '}
+              {/* Prefer explicit backend state if present, fallback to legacy status */}
+              <BookingStatusBadge value={b.state ?? b.status} size="md" />
             </div>
           </li>
         ))}
