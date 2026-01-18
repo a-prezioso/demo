@@ -64,11 +64,31 @@ export class AuthController {
     }
   };
 
+  // Helper: parse cookie header string into map (avoid dependency on cookie-parser)
+  private parseCookieHeader(cookieHeader?: string): Record<string, string> {
+    const out: Record<string, string> = {};
+    if (!cookieHeader) return out;
+    const parts = cookieHeader.split(';');
+    for (const part of parts) {
+      const idx = part.indexOf('=');
+      if (idx === -1) continue;
+      const name = part.slice(0, idx).trim();
+      const val = part.slice(idx + 1).trim();
+      if (name) out[name] = decodeURIComponent(val);
+    }
+    return out;
+  }
+
   // POST /api/auth/refresh
   refresh = async (req: Request, res: Response) => {
     try {
-      const { refreshToken } = (req.body || {}) as { refreshToken?: string };
-      const result = await this.authService.refresh({ refreshToken: refreshToken ?? '' }, {
+      // Prefer HttpOnly cookie if available; fall back to body
+      const cookies = (req as any).cookies || this.parseCookieHeader(req.headers['cookie'] as string | undefined);
+      const cookieToken = cookies?.refreshToken || cookies?.rt || cookies?.refresh_token;
+      const { refreshToken: bodyToken } = (req.body || {}) as { refreshToken?: string };
+      const refreshToken = (cookieToken || bodyToken || '') as string;
+
+      const result = await this.authService.refresh({ refreshToken }, {
         userAgent: req.headers['user-agent'] as string | undefined,
         ip: (req.headers['x-forwarded-for'] as string) || req.ip,
       });
@@ -96,8 +116,10 @@ export class AuthController {
         await this.authService.logout({ userId: (req as any).user.id });
         return res.status(200).json({ success: true });
       }
-      // Otherwise, try to revoke specific refresh token value
-      await this.authService.logout({ refreshToken: refreshToken });
+      // Otherwise, try to revoke specific refresh token value; prefer cookie if present
+      const cookies = (req as any).cookies || this.parseCookieHeader(req.headers['cookie'] as string | undefined);
+      const cookieToken = cookies?.refreshToken || cookies?.rt || cookies?.refresh_token;
+      await this.authService.logout({ refreshToken: refreshToken || cookieToken });
       return res.status(200).json({ success: true });
     } catch (e: any) {
       if (e?.code === 'BAD_REQUEST') {
