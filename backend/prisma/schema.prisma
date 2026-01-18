@@ -27,6 +27,14 @@ enum ClosureType {
   @@map("closure_type")
 }
 
+// Booking lifecycle state (computed/managed by backend)
+enum BookingState {
+  PASSATA
+  ATTIVA
+  CANCELLATA
+  @@map("booking_state")
+}
+
 /// User model
 /// IMPORTANT: Do not log sensitive fields (passwordHash, salt, verificationToken)
 model User {
@@ -90,6 +98,7 @@ model Booking {
   date       DateTime
   timeSlot   String?       @map("time_slot") @db.VarChar(50)
   status     BookingStatus @default(CONFIRMED)
+  state      BookingState  @default(ATTIVA) @map("state")
   createdAt  DateTime      @default(now()) @map("created_at")
   updatedAt  DateTime      @updatedAt @map("updated_at")
 
@@ -99,6 +108,7 @@ model Booking {
   @@unique([deskId, date, timeSlot], map: "uq_booking_unique")
   @@index([userId], map: "idx_bookings_user_id")
   @@index([date], map: "idx_bookings_date")
+  @@index([state], map: "idx_bookings_state")
 }
 
 // Coworking closures configuration
