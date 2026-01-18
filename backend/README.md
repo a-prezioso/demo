@@ -24,12 +24,14 @@ Security services added:
 
 HTTP API added:
 - Express server in src/server.ts
-- Auth routes in src/modules/user/interfaces/http/authRoutes.ts exposing POST /api/auth/signup
-- Login route in src/modules/auth/interfaces/http/loginRoute.ts exposing POST /api/auth/login
+- Auth routes in src/modules/user/interfaces/http/authRoutes.ts (signup)
+- Login route in src/modules/auth/interfaces/http/loginRoute.ts (login)
+- JWT service in src/core/jwt/jwtService.ts to sign access tokens and generate refresh tokens
+- NEW: JWT auth middleware in src/core/jwt/authMiddleware.ts with role-based guard and optional revocation check
+- Example protected routes in server.ts: GET /api/protected/profile (any authenticated user) and GET /api/admin/overview (requires admin role)
 
-JWT services:
-- src/core/jwt/jwtService.ts minimal HS256 signer and random refresh token generator
+How to protect new routes:
+- Import requireAuth from src/core/jwt/authMiddleware and attach to router/route: router.get('/path', requireAuth(), handler)
+- For role checks: router.post('/admin', requireRoles(['admin']), handler)
+- Optionally inject a revocation checker: requireAuth({ isTokenRevoked: async (claims, token) => false })
 
-Tests:
-- Unit tests for security and user entity
-- Integration tests for signup and login endpoints

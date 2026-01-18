@@ -5,6 +5,7 @@ import express from 'express';
 import { authRouter } from './modules/user/interfaces/http/authRoutes';
 import { loginRouter } from './modules/auth/interfaces/http/loginRoute';
 import { logger } from './core/logging/logger';
+import { requireAuth, requireRoles } from './core/jwt/authMiddleware';
 
 const app = express();
 app.use(express.json());
@@ -12,6 +13,16 @@ app.use(express.json());
 // Base path for API
 app.use('/api/auth', authRouter);
 app.use('/api/auth', loginRouter);
+
+// Example protected routes pattern (for future reuse)
+app.get('/api/protected/profile', requireAuth(), (req, res) => {
+  const user = (req as any).user;
+  return res.status(200).json({ profile: { id: user?.id, email: user?.email, roles: user?.roles || [] } });
+});
+
+app.get('/api/admin/overview', requireRoles(['admin']), (req, res) => {
+  return res.status(200).json({ ok: true });
+});
 
 // Health endpoint
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));

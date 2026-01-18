@@ -2,7 +2,7 @@
 // Provides signing and basic verification using Node's crypto.
 // Sensitive data (secrets, tokens) must never be logged.
 
-import { createHmac, randomBytes } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
 export interface JwtConfig {
   alg: 'HS256';
@@ -32,6 +32,16 @@ const base64url = {
       .replace(/=/g, '')
       .replace(/\+/g, '-')
       .replace(/\//g, '_');
+  },
+  decode: (input: string): Buffer => {
+    // Replace URL-safe chars
+    let b64 = input.replace(/-/g, '+').replace(/_/g, '/');
+    // Pad with '=' to length % 4 === 0
+    const pad = b64.length % 4;
+    if (pad === 2) b64 += '==';
+    else if (pad === 3) b64 += '=';
+    else if (pad !== 0) b64 += '='.repeat(4 - pad);
+    return Buffer.from(b64, 'base64');
   },
 };
 
@@ -73,6 +83,59 @@ export class JwtService {
     const signature = createHmac('sha256', this.cfg.secret).update(data).digest();
     const encodedSig = base64url.encode(signature);
     return `${data}.${encodedSig}`;
+  }
+
+  // Verify HS256 token integrity and expiry; returns claims (payload)
+  verify(token: string): any {
+    if (!token || typeof token !== 'string') {
+      throw new Error('malformed_token');
+    }
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      throw new Error('malformed_token');
+    }
+    const [encodedHeader, encodedPayload, encodedSig] = parts;
+
+    let header: any;
+    let payload: any;
+    try {
+      header = JSON.parse(base64url.decode(encodedHeader).toString('utf8'));
+      payload = JSON.parse(base64url.decode(encodedPayload).toString('utf8'));
+    } catch {
+      throw new Error('malformed_token');
+    }
+
+    if (!header || header.alg !== this.cfg.alg) {
+      throw new Error('invalid_token');
+    }
+
+    // Recompute signature
+    const data = `${encodedHeader}.${encodedPayload}`;
+    const expectedSig = createHmac('sha256', this.cfg.secret).update(data).digest();
+    const gotSig = base64url.decode(encodedSig);
+
+    // Compare safely
+    if (expectedSig.length !== gotSig.length || !timingSafeEqual(expectedSig, gotSig)) {
+      throw new Error('invalid_signature');
+    }
+
+    // Validate exp
+    if (typeof payload.exp === 'number') {
+      const now = Math.floor(Date.now() / 1000);
+      if (now >= payload.exp) {
+        throw new Error('token_expired');
+      }
+    }
+
+    // Optional iss/aud checks when present
+    if (payload.iss && this.cfg.issuer && payload.iss !== this.cfg.issuer) {
+      throw new Error('invalid_token');
+    }
+    if (payload.aud && this.cfg.audience && payload.aud !== this.cfg.audience) {
+      throw new Error('invalid_token');
+    }
+
+    return payload;
   }
 
   // Utilities for refresh token
