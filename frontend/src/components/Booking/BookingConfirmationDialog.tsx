@@ -1,150 +1,94 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import type { BookingPreview } from '../Dashboard/DashboardPage';
+import React, { useCallback, useMemo, useState } from 'react';
+import { createBooking, type CreateDeskBookingRequest } from '../../api/bookingClient';
+import { dispatchBookingCreated } from '../../events/bookingEvents';
 
 export type BookingConfirmationDialogProps = {
   isOpen: boolean;
-  preview: BookingPreview | null;
-  onConfirm: (preview: BookingPreview) => void | Promise<void>;
-  onCancel: () => void;
-  loading?: boolean;
-  titleText?: string; // optional custom title
+  deskId: string | null;
+  date: string | null; // YYYY-MM-DD
+  baseUrl?: string;
+  onClose: () => void;
+  onSuccess?: (bookingId: string) => void;
 };
 
 export const BookingConfirmationDialog: React.FC<BookingConfirmationDialogProps> = ({
   isOpen,
-  preview,
-  onConfirm,
-  onCancel,
-  loading,
-  titleText,
+  deskId,
+  date,
+  baseUrl,
+  onClose,
+  onSuccess,
 }) => {
-  const confirmRef = useRef<HTMLButtonElement>(null);
-  const titleRef = useRef<HTMLHeadingElement>(null);
-  const titleId = useMemo(() => `booking-dialog-title`, []);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    // Focus confirm as primary action, fallback to title for screen readers
-    const t = setTimeout(() => {
-      if (confirmRef.current) confirmRef.current.focus();
-      else if (titleRef.current) titleRef.current.focus();
-    }, 0);
-    return () => clearTimeout(t);
-  }, [isOpen]);
+  const canSubmit = useMemo(() => !!isOpen && !!deskId && !!date, [isOpen, deskId, date]);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (!isOpen) return;
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onCancel();
-      }
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, onCancel]);
+  const handleConfirm = useCallback(async () => {
+    if (!canSubmit || !deskId || !date) return;
+    setSubmitting(true);
+    setError(null);
 
-  if (!isOpen || !preview) return null;
+    const payload: CreateDeskBookingRequest = {
+      deskId,
+      date,
+    } as any;
 
-  function formatDate(date: Date): string {
     try {
-      const d = new Date(date);
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      return `${dd}/${mm}/${yyyy}`;
-    } catch {
-      return '';
+      const res = await createBooking(payload, { baseUrl });
+      // Dispatch UI event to update desks grid immediately
+      dispatchBookingCreated({ deskId, date });
+      // Optional: expose success for toasts
+      onSuccess?.(res.bookingId);
+      onClose();
+    } catch (e: any) {
+      setError(e?.message || 'booking.create_failed');
+    } finally {
+      setSubmitting(false);
     }
-  }
+  }, [canSubmit, deskId, date, baseUrl, onClose, onSuccess]);
+
+  if (!isOpen) return null;
 
   return (
-    <div style={styles.overlay}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        style={styles.dialog}
-      >
-        <h2 id={titleId} ref={titleRef} tabIndex={-1} style={styles.title}>
-          {titleText || 'Conferma prenotazione'}
-        </h2>
-        <div style={styles.content}>
-          <div style={styles.row}><span style={styles.label}>Postazione:</span><span>{preview.deskName} ({preview.deskId})</span></div>
-          <div style={styles.row}><span style={styles.label}>Data:</span><span>{formatDate(preview.bookingDate)}</span></div>
-          {preview.building ? (
-            <div style={styles.row}><span style={styles.label}>Edificio:</span><span>{preview.building}</span></div>
-          ) : null}
-          {preview.floor ? (
-            <div style={styles.row}><span style={styles.label}>Piano:</span><span>{preview.floor}</span></div>
-          ) : null}
-        </div>
-        <div style={styles.actions}>
-          <button
-            ref={confirmRef}
-            onClick={() => onConfirm(preview)}
-            disabled={!!loading}
-            style={{ ...styles.primaryBtn, opacity: loading ? 0.7 : 1 }}
-            aria-busy={!!loading}
-          >
-            {loading ? 'Conferma…' : 'Conferma'}
+    <div role="dialog" aria-label="Conferma prenotazione" className="booking-dialog">
+      <div className="booking-dialog__content">
+        <h2>Prenota postazione</h2>
+        <p>
+          Confermi la prenotazione della postazione <strong>{deskId}</strong> per il giorno{' '}
+          <strong>{date}</strong>?
+        </p>
+        {error && (
+          <div role="alert" className="booking-dialog__error" aria-live="assertive">
+            {error}
+          </div>
+        )}
+        <div className="booking-dialog__actions">
+          <button onClick={onClose} disabled={submitting} aria-label="Annulla prenotazione">
+            Annulla
           </button>
-          <button onClick={onCancel} style={styles.secondaryBtn}>Annulla</button>
+          <button
+            onClick={handleConfirm}
+            disabled={!canSubmit || submitting}
+            aria-label="Conferma prenotazione"
+          >
+            {submitting ? 'Salvataggio…' : 'Conferma'}
+          </button>
+        </div>
+        <div className="booking-dialog__legend" aria-label="Legenda disponibilità">
+          <ul>
+            <li>
+              <span className="legend-dot legend-dot--green" aria-hidden="true" /> Disponibile
+            </li>
+            <li>
+              <span className="legend-dot legend-dot--red" aria-hidden="true" /> Prenotata
+            </li>
+            <li>
+              <span className="legend-dot legend-dot--gray" aria-hidden="true" /> Non prenotabile
+            </li>
+          </ul>
         </div>
       </div>
     </div>
   );
 };
-
-const styles: Record<string, React.CSSProperties> = {
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(15, 23, 42, 0.45)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 50,
-  },
-  dialog: {
-    width: 'min(92vw, 480px)',
-    background: '#ffffff',
-    borderRadius: 12,
-    boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-    padding: 16,
-    border: '1px solid #e5e7eb',
-  },
-  title: {
-    margin: '4px 0 12px 0',
-    fontSize: 18,
-    outline: 'none',
-  },
-  content: {
-    display: 'grid',
-    gap: 8,
-    marginBottom: 12,
-  },
-  row: { display: 'flex', gap: 8, alignItems: 'baseline' },
-  label: { color: '#64748b', minWidth: 88, display: 'inline-block' },
-  actions: { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 },
-  primaryBtn: {
-    background: '#2c7be5',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
-    padding: '10px 12px',
-    cursor: 'pointer',
-    fontWeight: 600,
-  },
-  secondaryBtn: {
-    background: '#f1f5f9',
-    color: '#0f172a',
-    border: '1px solid #cbd5e1',
-    borderRadius: 8,
-    padding: '10px 12px',
-    cursor: 'pointer',
-    fontWeight: 500,
-  },
-};
-
-export default BookingConfirmationDialog;

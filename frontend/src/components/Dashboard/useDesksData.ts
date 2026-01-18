@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchDeskStatuses, type DeskStatusItem, type DeskStatus } from '../../api/desksClient';
+import { addBookingCreatedListener, type BookingCreatedDetail } from '../../events/bookingEvents';
 
 export type Desk = {
   id: string; // D01..D12
@@ -27,6 +28,8 @@ export const defaultDesks: Desk[] = [
 export type UseDesksDataOptions = {
   baseUrl?: string;
   pollingMs?: number; // default 30000
+  // Optional selected date (YYYY-MM-DD) to scope real-time updates.
+  date?: string;
 };
 
 export type UseDesksData = {
@@ -53,6 +56,7 @@ function mergeStatuses(layout: Desk[], statuses: DeskStatusItem[]): Desk[] {
 export function useDesksData(opts?: UseDesksDataOptions): UseDesksData {
   const baseUrl = opts?.baseUrl || '/api';
   const pollingMs = opts?.pollingMs ?? 30000;
+  const selectedDate = opts?.date; // YYYY-MM-DD
 
   const [desks, setDesks] = useState<Desk[]>(defaultDesks);
   const [loading, setLoading] = useState<boolean>(false);
@@ -113,6 +117,20 @@ export function useDesksData(opts?: UseDesksDataOptions): UseDesksData {
     }, pollingMs);
     return () => clearInterval(id);
   }, [doFetch, pollingMs]);
+
+  // Real-time local update after booking created
+  useEffect(() => {
+    // Listen and optimistically set a desk to busy when booking is created for selected date
+    const remove = addBookingCreatedListener((detail: BookingCreatedDetail) => {
+      if (!mountedRef.current) return;
+      // If a date filter exists, only update for matching date
+      if (selectedDate && detail.date !== selectedDate) return;
+      setDesks((prev) =>
+        prev.map((d) => (d.id === detail.deskId ? { ...d, status: 'busy' as DeskStatus } : d)),
+      );
+    });
+    return () => remove();
+  }, [selectedDate]);
 
   const refresh = useCallback(async () => {
     await doFetch();
