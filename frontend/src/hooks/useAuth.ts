@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { login as apiLogin, signup as apiSignup, type LoginSuccessResponse } from '../api/authClient';
+import { getAuthState, setAuthState, clearAuthState } from '../auth/tokenStorage';
 
 export type AuthState = {
   isAuthenticated: boolean;
@@ -9,20 +10,18 @@ export type AuthState = {
 };
 
 function loadFromStorage(): AuthState {
-  try {
-    const raw = localStorage.getItem('auth');
-    if (!raw) return { isAuthenticated: false };
-    const parsed = JSON.parse(raw);
-    return { isAuthenticated: !!parsed?.accessToken, ...parsed } as AuthState;
-  } catch {
-    return { isAuthenticated: false };
-  }
+  // Delegate to tokenStorage for consistency
+  const s = getAuthState();
+  return {
+    isAuthenticated: !!s.isAuthenticated && !!s.accessToken,
+    accessToken: s.accessToken,
+    refreshToken: s.refreshToken,
+    user: s.user ?? null,
+  };
 }
 
 function persist(state: AuthState) {
-  try {
-    localStorage.setItem('auth', JSON.stringify(state));
-  } catch {}
+  setAuthState(state);
 }
 
 export function useAuth(baseUrl = '/api') {
@@ -87,6 +86,7 @@ export function useAuth(baseUrl = '/api') {
   );
 
   const logout = useCallback(() => {
+    clearAuthState();
     const next: AuthState = { isAuthenticated: false, accessToken: undefined, refreshToken: undefined, user: null };
     setAndPersist(next);
   }, [setAndPersist]);
