@@ -11,10 +11,10 @@ export type BottomNavigationProps = {
  * - Uses NavLink to reflect active route state
  * - Touch-friendly minimum sizes
  */
-export const BottomNavigation: React.FC<BottomNavigationProps> = ({ basePath = '' }) => {
+export const BottomNavigation: React.FC<BottomNavigationProps> = ({ basePath = '/dashboard' }) => {
   const items = [
-    { key: 'map', label: 'Mappa', to: `${basePath}/` },
-    { key: 'bookings', label: 'Le mie prenotazioni', to: `${basePath}/bookings` },
+    { key: 'map', label: 'Mappa', to: `${basePath}/mappa` },
+    { key: 'bookings', label: 'Le mie prenotazioni', to: `${basePath}/prenotazioni` },
   ];
 
   return (
@@ -24,7 +24,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ basePath = '
           key={item.key}
           to={item.to}
           aria-label={item.label}
-          end={item.to.endsWith('/')}
+          end={item.to.endsWith('/mappa')}
           style={({ isActive }) => ({
             ...styles.link,
             ...(isActive ? styles.linkActive : {}),

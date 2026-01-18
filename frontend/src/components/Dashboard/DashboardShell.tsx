@@ -1,34 +1,32 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { BottomNavigation } from '../Navigation';
-import { SelectedDateProvider } from '../../context/SelectedDateContext';
+import BottomNavigation from '../Navigation/BottomNavigation';
 
 /**
- * DashboardShell renders a persistent layout with outlet area and bottom navigation.
- * It also provides SelectedDateProvider so the selected date is shared across child routes.
+ * DashboardShell renders the outlet area and a persistent bottom navigation.
+ * It must not trigger full reloads and relies on SPA routing.
  */
 export const DashboardShell: React.FC = () => {
   return (
-    <SelectedDateProvider>
-      <div style={styles.shell}>
-        <main style={styles.main}>
-          <Outlet />
-        </main>
-        <BottomNavigation basePath="" />
+    <div style={styles.container}>
+      <div style={styles.content}>
+        <Outlet />
       </div>
-    </SelectedDateProvider>
+      <BottomNavigation basePath="/dashboard" />
+    </div>
   );
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  shell: {
-    position: 'relative',
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
     minHeight: '100vh',
     background: '#f9fafb',
-    paddingBottom: 56, // reserve space for bottom nav
   },
-  main: {
-    paddingBottom: 16,
+  content: {
+    flex: 1,
+    paddingBottom: 56, // reserve space for bottom nav
   },
 };
 

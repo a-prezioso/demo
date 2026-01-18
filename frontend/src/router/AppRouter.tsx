@@ -1,11 +1,17 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import AuthPage from '../components/Auth/AuthPage';
 import { useAuthContext } from '../context/AuthContext';
 import ProtectedRoute from './ProtectedRoute';
-import { DashboardPage } from '../components/Dashboard/DashboardPage';
-import { MyBookingsPage } from '../components/Bookings/MyBookingsPage';
 import { DashboardShell } from '../components/Dashboard/DashboardShell';
+
+// Lazy-loaded pages for faster initial paint
+const DashboardPageLazy = React.lazy(() =>
+  import('../components/Dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+);
+const MyBookingsPageLazy = React.lazy(() =>
+  import('../components/Bookings/MyBookingsPage').then((m) => ({ default: m.MyBookingsPage })),
+);
 
 // Wrapper around AuthPage that handles redirection if already authenticated
 const AuthPageWrapper: React.FC<{ baseUrl?: string }> = ({ baseUrl = '/api' }) => {
@@ -13,14 +19,14 @@ const AuthPageWrapper: React.FC<{ baseUrl?: string }> = ({ baseUrl = '/api' }) =
   const navigate = useNavigate();
   const location = useLocation() as any;
 
-  // If already logged in, redirect to dashboard
+  // If already logged in, redirect to dashboard map
   if (state.isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard/mappa" replace />;
   }
 
   const onSuccess = () => {
     // after successful login, redirect to previous requested route if provided
-    const from = location?.state?.from?.pathname || '/';
+    const from = location?.state?.from?.pathname || '/dashboard/mappa';
     navigate(from, { replace: true });
   };
 
@@ -33,27 +39,62 @@ export const AppRouter: React.FC<AppRouterProps> = ({ baseUrl = '/api' }) => {
   const { state } = useAuthContext();
   const routerBase = useMemo(() => ({ baseUrl }), [baseUrl]);
 
+  // Prefetch the secondary screens after mount to reduce perceived latency on tab switch
+  useEffect(() => {
+    // Fire-and-forget dynamic imports (browser may use low priority)
+    import('../components/Bookings/MyBookingsPage');
+    import('../components/Dashboard/DashboardPage');
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<AuthPageWrapper baseUrl={routerBase.baseUrl} />} />
 
+        {/* Legacy redirects to new dashboard routes */}
+        <Route path="/" element={<Navigate to="/dashboard/mappa" replace />} />
+        <Route path="/bookings" element={<Navigate to="/dashboard/prenotazioni" replace />} />
+
         {/* Protected area with persistent layout and bottom navigation */}
         <Route
-          path="/"
+          path="/dashboard"
           element={
             <ProtectedRoute>
               <DashboardShell />
             </ProtectedRoute>
           }
         >
-          <Route index element={<DashboardPage baseUrl={routerBase.baseUrl} />} />
-          <Route path="bookings" element={<MyBookingsPage />} />
+          {/* Default inside dashboard: map */}
+          <Route index element={<Navigate to="mappa" replace />} />
+
+          <Route
+            path="mappa"
+            element={
+              <Suspense fallback={<div>Caricamento…</div>}>
+                <DashboardPageLazy baseUrl={routerBase.baseUrl} />
+              </Suspense>
+            }
+          />
+
+          <Route
+            path="prenotazioni"
+            element={
+              <Suspense fallback={<div>Caricamento…</div>}>
+                <MyBookingsPageLazy />
+              </Suspense>
+            }
+          />
+
+          {/* Fallback unknown routes within the dashboard to map */}
+          <Route path="*" element={<Navigate to="mappa" replace />} />
         </Route>
 
-        {/* Fallback: redirect unknown routes */}
-        <Route path="*" element={<Navigate to={state.isAuthenticated ? '/' : '/login'} replace />} />
+        {/* Global fallback: redirect unknown routes based on auth state */}
+        <Route
+          path="*"
+          element={<Navigate to={state.isAuthenticated ? '/dashboard/mappa' : '/login'} replace />}
+        />
       </Routes>
     </BrowserRouter>
   );
