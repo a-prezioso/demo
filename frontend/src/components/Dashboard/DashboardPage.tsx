@@ -12,12 +12,23 @@ export type Desk = {
   status: DeskStatus;
 };
 
+export type BookingPreview = {
+  deskId: string;
+  deskName: string;
+  bookingDate: Date;
+  building?: string | null;
+  floor?: string | null;
+};
+
 export type DashboardPageProps = {
   baseUrl?: string;
   desks?: Desk[]; // opzionale per injection/test; se assente usare layout demo
   onRefresh?: () => Promise<void> | void; // hook refresh esterno
-  onBook?: (deskId: string) => void; // callback per aprire pagina prenotazione
+  onBook?: (deskId: string) => void; // callback per aprire pagina prenotazione (legacy)
+  onDeskSelected?: (desk: Desk, date: Date, preview: BookingPreview) => void; // nuovo evento
+  onConfirmBooking?: (preview: BookingPreview) => void; // conferma prenotazione da popup
   pollingMs?: number; // intervallo aggiornamento periodico
+  bookingDate?: Date; // data proveniente da datepicker globale; default: oggi
 };
 
 export const defaultDesks: Desk[] = [
@@ -40,7 +51,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   desks,
   onRefresh,
   onBook,
+  onDeskSelected,
+  onConfirmBooking,
   pollingMs,
+  bookingDate,
 }) => {
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -71,7 +85,41 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     }
   }
 
+  const todayAtStart = useMemo(() => {
+    const dt = bookingDate ? new Date(bookingDate) : new Date();
+    // normalizza a mezzanotte locale
+    dt.setHours(0, 0, 0, 0);
+    return dt;
+  }, [bookingDate]);
+
   const current = useMemo(() => items.find((d) => d.id === selected) || null, [items, selected]);
+
+  const currentPreview: BookingPreview | null = useMemo(() => {
+    if (!current) return null;
+    return {
+      deskId: current.id,
+      deskName: current.name,
+      bookingDate: todayAtStart,
+      building: null,
+      floor: null,
+    };
+  }, [current, todayAtStart]);
+
+  function onDeskTap(desk: Desk) {
+    // Solo postazioni libere aprono il popup/preview
+    if (desk.status !== 'free') {
+      return; // nessuna azione su occupata/non disponibile
+    }
+    setSelected(desk.id);
+    const preview: BookingPreview = {
+      deskId: desk.id,
+      deskName: desk.name,
+      bookingDate: todayAtStart,
+      building: null,
+      floor: null,
+    };
+    onDeskSelected?.(desk, todayAtStart, preview);
+  }
 
   return (
     <div style={styles.page}>
@@ -110,7 +158,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 key={d.id}
                 desk={d}
                 selected={selected === d.id}
-                onSelect={() => setSelected(d.id)}
+                onSelect={() => onDeskTap(d)}
               />
             ))}
           </svg>
@@ -126,8 +174,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
       <DetailsSheet
         desk={current}
+        preview={currentPreview}
         onClose={() => setSelected(null)}
-        onBook={onBook}
+        onBook={(deskId: string) => onBook?.(deskId)}
+        onConfirm={(p) => onConfirmBooking?.(p)}
       />
     </div>
   );
@@ -152,16 +202,20 @@ const DeskMarker: React.FC<{
   const x = desk.x - size / 2;
   const y = desk.y - size / 2;
 
+  const isClickable = status === 'free';
+
   return (
     <g
-      role="button"
-      tabIndex={0}
+      role={isClickable ? 'button' : 'img'}
+      aria-disabled={!isClickable}
+      tabIndex={isClickable ? 0 : -1}
       aria-label={`Postazione ${desk.id} – ${a11yStatus(status)}`}
-      onClick={onSelect}
+      onClick={() => isClickable && onSelect()}
       onKeyDown={(e) => {
+        if (!isClickable) return;
         if (e.key === 'Enter' || e.key === ' ') onSelect();
       }}
-      style={{ cursor: 'pointer' }}
+      style={{ cursor: isClickable ? 'pointer' : 'not-allowed' }}
     >
       <rect
         x={x}
@@ -183,9 +237,11 @@ const DeskMarker: React.FC<{
 
 const DetailsSheet: React.FC<{
   desk: Desk | null;
+  preview: BookingPreview | null;
   onClose: () => void;
-  onBook?: (deskId: string) => void;
-}> = ({ desk, onClose, onBook }) => {
+  onBook?: (deskId: string) => void; // legacy
+  onConfirm?: (preview: BookingPreview) => void;
+}> = ({ desk, preview, onClose, onBook, onConfirm }) => {
   const isOpen = !!desk;
   if (!desk) return null;
   const { bg, border, fore } = getColor(desk.status);
@@ -198,12 +254,21 @@ const DetailsSheet: React.FC<{
           {symbolFor(desk.status)} {a11yStatus(desk.status)}
         </div>
         <h2 style={styles.sheetTitle}>{desk.name}</h2>
-        <p style={styles.sheetSub}>Ultimo aggiornamento: {formatRelative(new Date())}</p>
+        {preview && (
+          <p style={styles.sheetSub}>
+            Data prenotazione: {formatDate(preview.bookingDate)}
+          </p>
+        )}
         <div style={styles.sheetActions}>
           <button
             style={{ ...styles.primaryBtn, opacity: canBook ? 1 : 0.6 }}
             disabled={!canBook}
-            onClick={() => onBook?.(desk.id)}
+            onClick={() => {
+              if (!canBook) return;
+              // callback nuova con preview; manteniamo anche compat legacy
+              if (preview) onConfirm?.(preview);
+              onBook?.(desk.id);
+            }}
           >
             Prenota
           </button>
@@ -238,6 +303,18 @@ function formatRelative(date: Date): string {
   if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)}m fa`;
   const d = new Date(date);
   return d.toLocaleTimeString();
+}
+
+function formatDate(date: Date): string {
+  try {
+    const d = new Date(date);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  } catch {
+    return '';
+  }
 }
 
 const styles: Record<string, React.CSSProperties> = {
