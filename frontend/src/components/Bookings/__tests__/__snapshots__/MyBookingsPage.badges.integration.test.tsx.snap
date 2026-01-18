@@ -1,0 +1,110 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`MyBookingsPage - badges integration renders badges for Passata, Attiva, Cancellata with correct labels and styles 1`] = `
+<div>
+  <h1>
+    Le Mie Prenotazioni
+  </h1>
+  <ul>
+    <li
+      data-start="2026-01-10T08:00:00.000Z"
+      data-testid="booking-row"
+    >
+      <div>
+        <strong>
+          Postazione:
+        </strong>
+         D-100
+      </div>
+      <div>
+        <strong>
+          Data/ora:
+        </strong>
+         01/10/2026, 08:00
+      </div>
+      <div>
+        <strong>
+          Stato:
+        </strong>
+        
+        <span
+          aria-label="Passata"
+          class=""
+          data-state="passed"
+          role="status"
+          style="display: inline-block; padding: 4px 10px; font-size: 0.875rem; line-height: 1.2; border-radius: 9999px; background-color: rgb(107, 114, 128); color: rgb(255, 255, 255); font-weight: 600;"
+          title="Passata"
+        >
+          Passata
+        </span>
+      </div>
+    </li>
+    <li
+      data-start="2026-01-18T08:00:00.000Z"
+      data-testid="booking-row"
+    >
+      <div>
+        <strong>
+          Postazione:
+        </strong>
+         D-101
+      </div>
+      <div>
+        <strong>
+          Data/ora:
+        </strong>
+         01/18/2026, 08:00
+      </div>
+      <div>
+        <strong>
+          Stato:
+        </strong>
+        
+        <span
+          aria-label="Attiva"
+          class=""
+          data-state="active"
+          role="status"
+          style="display: inline-block; padding: 4px 10px; font-size: 0.875rem; line-height: 1.2; border-radius: 9999px; background-color: rgb(22, 163, 74); color: rgb(255, 255, 255); font-weight: 600;"
+          title="Attiva"
+        >
+          Attiva
+        </span>
+      </div>
+    </li>
+    <li
+      data-start="2026-01-19T08:00:00.000Z"
+      data-testid="booking-row"
+    >
+      <div>
+        <strong>
+          Postazione:
+        </strong>
+         D-102
+      </div>
+      <div>
+        <strong>
+          Data/ora:
+        </strong>
+         01/19/2026, 08:00
+      </div>
+      <div>
+        <strong>
+          Stato:
+        </strong>
+        
+        <span
+          aria-label="Cancellata"
+          class=""
+          data-state="cancelled"
+          role="status"
+          style="display: inline-block; padding: 4px 10px; font-size: 0.875rem; line-height: 1.2; border-radius: 9999px; background-color: rgb(220, 38, 38); color: rgb(255, 255, 255); font-weight: 600;"
+          title="Cancellata"
+        >
+          Cancellata
+        </span>
+      </div>
+    </li>
+  </ul>
+</div>
+`;
