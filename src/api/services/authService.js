@@ -5,6 +5,7 @@
 const crypto = require("crypto");
 const db = require("../../db");
 const { passwordService, validationService, jwtService } = require("../../security");
+const refreshRepo = require("../repositories/refreshTokenRepository");
 
 function getCfg() {
   const refreshTtlSec = parseInt(process.env.JWT_REFRESH_EXPIRES_IN || "2592000", 10); // 30d
@@ -24,22 +25,9 @@ function randomToken(bytes = 32) {
   return toBase64Url(raw);
 }
 
-function hashToken(token) {
-  return crypto.createHash("sha256").update(token).digest("hex");
-}
-
 async function createRefreshSession(userId, token, { userAgent, ip } = {}) {
   const { refreshTtlSec } = getCfg();
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + refreshTtlSec * 1000);
-  const tokenHash = hashToken(token);
-
-  const sql = `
-    INSERT INTO auth_refresh_tokens (user_id, token_hash, issued_at, expires_at, user_agent, ip_address)
-    VALUES ($1, $2, now(), $3, $4, $5)
-    RETURNING id
-  `;
-  await db.query(sql, [userId, tokenHash, expiresAt, userAgent || null, ip || null]);
+  await refreshRepo.createSession({ userId, token, ttlSec: refreshTtlSec, userAgent, ip });
 }
 
 async function login({ email, password, userAgent, ip }) {
@@ -116,21 +104,12 @@ async function refresh({ refreshToken, userAgent, ip, rotate = true }) {
     return { ok: false, code: 401, error: "Invalid refresh token" };
   }
 
-  const tokenHash = hashToken(refreshToken);
+  const tokenHash = refreshRepo.hashToken(refreshToken);
 
   // Lookup session and user
   let row;
   try {
-    const { rows } = await db.query(
-      `SELECT t.id as session_id, t.user_id, t.expires_at, t.revoked_at, t.last_used_at,
-              u.email, u.status, u.roles
-         FROM auth_refresh_tokens t
-         JOIN users u ON u.id = t.user_id
-        WHERE t.token_hash = $1
-        LIMIT 1`,
-      [tokenHash]
-    );
-    row = rows[0];
+    row = await refreshRepo.findSessionWithUserByHash(tokenHash);
   } catch (_e) {
     return { ok: false, code: 500, error: "Internal server error" };
   }
@@ -160,10 +139,7 @@ async function refresh({ refreshToken, userAgent, ip, rotate = true }) {
     const clientUA = userAgent || null;
     const clientIp = ip || null;
     try {
-      await db.query(
-        `UPDATE auth_refresh_tokens SET revoked_at = now(), revoked_reason = $2, last_used_at = now() WHERE id = $1`,
-        [row.session_id, "rotated"]
-      );
+      await refreshRepo.revokeById(row.session_id, "rotated");
       await createRefreshSession(userId, newRefresh, { userAgent: clientUA, ip: clientIp });
     } catch (err) {
       return { ok: false, code: 500, error: "Internal server error" };
@@ -178,7 +154,7 @@ async function refresh({ refreshToken, userAgent, ip, rotate = true }) {
 
   // No rotation: update last_used_at best-effort
   try {
-    await db.query(`UPDATE auth_refresh_tokens SET last_used_at = now() WHERE id = $1`, [row.session_id]);
+    await refreshRepo.touchLastUsed(row.session_id);
   } catch (_e) {
     // ignore
   }
@@ -188,13 +164,10 @@ async function refresh({ refreshToken, userAgent, ip, rotate = true }) {
 
 async function revokeByToken(refreshToken) {
   if (typeof refreshToken !== "string" || refreshToken.length < 10) return false;
-  const tokenHash = hashToken(refreshToken);
+  const tokenHash = refreshRepo.hashToken(refreshToken);
   try {
-    const { rowCount } = await db.query(
-      `UPDATE auth_refresh_tokens SET revoked_at = now(), revoked_reason = $2 WHERE token_hash = $1 AND revoked_at IS NULL`,
-      [tokenHash, "logout"]
-    );
-    return rowCount > 0;
+    const ok = await refreshRepo.revokeByTokenHash(tokenHash, "logout");
+    return ok;
   } catch (_e) {
     return false;
   }
@@ -203,10 +176,7 @@ async function revokeByToken(refreshToken) {
 async function revokeAllForUser(userId) {
   if (!userId) return false;
   try {
-    await db.query(
-      `UPDATE auth_refresh_tokens SET revoked_at = now(), revoked_reason = $2 WHERE user_id = $1 AND revoked_at IS NULL`,
-      [userId, "logout_all"]
-    );
+    await refreshRepo.revokeAllForUser(userId, "logout_all");
     return true;
   } catch (_e) {
     return false;

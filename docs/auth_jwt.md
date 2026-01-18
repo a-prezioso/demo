@@ -23,56 +23,41 @@ High-level flow (success path)
 
 Text diagram (simplified)
 Client --> POST /api/auth/login --> API
-API --> validate --> verify password --> issue tokens
-Client <-- 200 {access, refresh}
+API --> validate&issue --> stores refresh hash in auth_refresh_tokens
+Client <-- access+refresh -- API
+Client --> GET /api/secure (Authorization: Bearer <access>)
+API --> verify JWT --> 200 OK
+Client --> POST /api/auth/refresh (refreshToken)
+API --> hash, lookup session, rotate (revoke old + create new) --> 200 access+[refresh]
+Client --> POST /api/auth/logout (refreshToken) --> API revokes session
 
-Client --> GET /api/secure/* (Authorization: Bearer <access>)
-API --> verify JWT --> 200 or 401
+Data model: auth_refresh_tokens
+- id: UUID, primary key
+- user_id: UUID, not null, FK users(id) ON DELETE CASCADE
+- token_hash: TEXT, not null, unique (SHA-256 of opaque refresh token)
+- issued_at: TIMESTAMPTZ, default now()
+- last_used_at: TIMESTAMPTZ, nullable (updated on use)
+- expires_at: TIMESTAMPTZ, not null
+- revoked_at: TIMESTAMPTZ, nullable
+- revoked_reason: TEXT, nullable ("logout", "rotated", "logout_all", "security")
+- user_agent: TEXT, nullable
+- ip_address: INET, nullable
+- created_at/updated_at: TIMESTAMPTZ, default now(); updated via trigger
 
-Client --> POST /api/auth/refresh { refreshToken, [rotate=true] }
-API --> hash(refreshToken) --> lookup session --> check not revoked/expired -->
-        issue new access (and optionally rotate refresh) --> 200
+Repository API (Node)
+- createSession({ userId, token, ttlSec, userAgent, ip }): stores hash + metadata
+- findSessionWithUserByHash(tokenHash): returns joined session+user for validation
+- touchLastUsed(sessionId): updates last_used_at
+- revokeById(sessionId, reason): sets revoked_at
+- revokeByTokenHash(tokenHash, reason)
+- revokeAllForUser(userId, reason)
+- cleanupExpired({ retentionDays }): deletes expired; deletes revoked older than retentionDays
 
-Client --> POST /api/auth/logout { refreshToken } OR { allSessions: true } + Authorization: Bearer <access>
-API --> revoke session(s) --> 204
+Security notes
+- Never log raw refresh tokens or token hashes
+- Always rotate refresh tokens on use (default in refresh API); allow no-rotate for testing
+- Use HTTPS, secure+httpOnly cookie store recommended for browser apps
+- Consider rate limiting on login/refresh endpoints
 
-Token formats
-- Access token: JWT HS256, claims: iss, aud, iat, exp, sub (user id), email, roles.
-- Refresh token: opaque random string; we use base64url(randomBytes(48)). Only its SHA-256 hash is stored in DB.
-
-Database schema
-- Table auth_refresh_tokens
-  - id UUID PK
-  - user_id UUID FK -> users(id)
-  - token_hash TEXT NOT NULL (sha256 of refresh token)
-  - issued_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  - last_used_at TIMESTAMPTZ NULL
-  - expires_at TIMESTAMPTZ NOT NULL
-  - revoked_at TIMESTAMPTZ NULL
-  - revoked_reason TEXT NULL
-  - user_agent TEXT NULL
-  - ip_address INET NULL
-  - created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  - updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  - Unique partial index on token_hash where revoked_at is null (optional)
-
-Refresh endpoint behavior
-- Input: { refreshToken, rotate? }
-- If token is invalid, not found, revoked or expired -> 401 { error: "Invalid refresh token" }
-- If user is PENDING -> 403; if DISABLED/SUSPENDED -> 423
-- On success:
-  - Issue new access token
-  - If rotate=true (default): revoke current session (set revoked_at, revoked_reason = 'rotated'), create new session with new refresh token, return both tokens
-  - If rotate=false: keep same refresh session, update last_used_at, return only new access token and the same refresh token for client convenience
-
-Logout / revoke behavior
-- POST /api/auth/logout
-  - { refreshToken } -> revoke that session (idempotent); 204
-  - { allSessions: true } + Authorization: Bearer <access> -> revoke all sessions for that user; 204
-
-Security considerations
-- Never store raw refresh tokens; only SHA-256 hashes.
-- Do not leak whether a refresh token exists; use generic 401 for invalid/expired/revoked.
-- Consider rate limiting for refresh and login endpoints to mitigate brute force.
-- Use HTTPS. Set httpOnly, secure, sameSite cookies if storing refresh token in cookies.
-- Rotating refresh tokens reduces replay windows; recommend default rotate=true.
+Operations
+- Cleanup job: schedule periodic invocation of repository.cleanupExpired (e.g., daily) via a background worker or external scheduler (cron).

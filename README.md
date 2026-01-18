@@ -10,6 +10,7 @@ Paths
 - src/security: Security services (password hashing/verification and input validation)
 - src/api: Minimal HTTP API server exposing /api/auth/signup and /api/auth/login
 - src/db: Database client (pg)
+- src/api/repositories: Persistence layer for refresh tokens
 
 Applying the migrations (PostgreSQL)
 - Requires extensions: citext, pgcrypto
@@ -32,25 +33,22 @@ Security services
   JWT_AUDIENCE (default smartdesk-clients)
   JWT_ACCESS_EXPIRES_IN (seconds, default 900)
   JWT_REFRESH_EXPIRES_IN (seconds, default 2592000)
-  JWT_CLOCK_SKEW_SEC (seconds, default 0)
 
-API
-- POST /api/auth/signup: create user
-- POST /api/auth/login: login with email/password, returns accessToken and refreshToken
-- POST /api/auth/refresh: issue a new access token (optionally rotate refresh token)
-- POST /api/auth/logout: revoke current session/refresh token
-- GET /api/secure/profile: example protected route, requires Bearer access token
-- GET /api/secure/admin/metrics: example admin-only route
-- GET /api/private/me: protected route guarded at router level (middleware applied to all /api/private/**)
-- GET /api/private/admin/overview: admin-only route under /api/private/**
+Auth APIs
+- POST /api/auth/signup
+- POST /api/auth/login
+- POST /api/auth/refresh
+- POST /api/auth/logout
 
-Running locally
-- Node >=16
-- npm install
-- npm start (requires DATABASE_URL or PG* env if you hit DB-backed endpoints)
+Protected APIs
+- GET /api/secure/profile (any authenticated user)
+- GET /api/secure/admin/metrics (ADMIN role)
+- GET /api/private/me, /api/private/admin/overview
 
-Testing
-- jest (unit + integration). Some tests use pg-mem to simulate Postgres.
+Refresh token persistence
+- Implemented in src/api/repositories/refreshTokenRepository.js
+- Functions: createSession, findSessionWithUserByHash, touchLastUsed, revokeById, revokeByTokenHash, revokeAllForUser, cleanupExpired
+- Only token hashes are stored; raw tokens are never persisted or logged
 
-Notes
-- In production always set a strong JWT_SECRET or use RS256 with JWT_PUBLIC_KEY for verification and keep the private key secure on the issuer.
+Maintenance
+- Schedule periodic cleanup of expired/old revoked refresh tokens using cleanupExpired({ retentionDays }).
