@@ -15,6 +15,10 @@ interface DbBookingRow {
   state?: string; // new column
   created_at: string;
   updated_at: string;
+  // New audit columns (may be absent in older schemas)
+  canceled_at?: string | null;
+  canceled_by?: string | null;
+  cancel_reason?: string | null;
 }
 
 function mapRow(row: DbBookingRow): Booking {
@@ -62,7 +66,9 @@ export async function createBooking(params: CreateBookingParams): Promise<Bookin
 }
 
 export async function findBookingByDeskAndDate(deskId: string, date: Date): Promise<Booking | null> {
-  const sql = 'SELECT * FROM bookings WHERE desk_id = $1 AND date = $2 LIMIT 1';
+  // Exclude canceled bookings when checking existence/availability
+  const sql =
+    "SELECT * FROM bookings WHERE desk_id = $1 AND date = $2 AND (state IS NULL OR state <> 'CANCELLATA') LIMIT 1";
   const res = await query<DbBookingRow>(sql, [deskId, date.toISOString().slice(0, 10)]);
   return res.rows[0] ? mapRow(res.rows[0]) : null;
 }
@@ -74,7 +80,9 @@ export async function findBookingById(id: string): Promise<Booking | null> {
 }
 
 export async function countUserBookingsOnDate(userId: string, date: Date): Promise<number> {
-  const sql = 'SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1 AND date = $2';
+  // Exclude canceled bookings from counting constraints
+  const sql =
+    "SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1 AND date = $2 AND (state IS NULL OR state <> 'CANCELLATA')";
   const res = await query<{ c: string }>(sql, [userId, date.toISOString().slice(0, 10)]);
   const c = res.rows[0] && (res.rows[0] as any).c;
   return c ? parseInt(c, 10) : 0;
@@ -122,12 +130,15 @@ export async function listUserBookings(
   // Determine today (UTC date)
   const todayIso = opts?.nowIsoDate || new Date().toISOString().slice(0, 10);
 
+  const excludeCanceled = opts?.includeCanceled ? false : true;
+  const activePredicate = excludeCanceled ? "AND (state IS NULL OR state <> 'CANCELLATA')" : '';
+
   // We build a UNION ALL query to get future (>= today) ascending then past (< today) descending
   const sql = `
     WITH future AS (
-      SELECT *, 0 AS bucket FROM bookings WHERE user_id = $1 AND date >= $2
+      SELECT *, 0 AS bucket FROM bookings WHERE user_id = $1 AND date >= $2 ${activePredicate}
     ), past AS (
-      SELECT *, 1 AS bucket FROM bookings WHERE user_id = $1 AND date < $2
+      SELECT *, 1 AS bucket FROM bookings WHERE user_id = $1 AND date < $2 ${activePredicate}
     ), concat AS (
       SELECT * FROM future
       UNION ALL
@@ -140,7 +151,7 @@ export async function listUserBookings(
     OFFSET $3 LIMIT $4
   `;
 
-  const countSql = 'SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1';
+  const countSql = `SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1 ${activePredicate}`;
 
   const [dataRes, countRes] = await Promise.all([
     query<DbBookingRow & { bucket: number }>(sql, [userId, todayIso, offset, size]),
@@ -149,7 +160,9 @@ export async function listUserBookings(
 
   const total = countRes.rows[0] ? parseInt((countRes.rows[0] as any).c, 10) : 0;
   const items: UserBookingItemDto[] = dataRes.rows.map((r) => {
-    const state = ((r as any).state as BookingState) || computeBookingState({ date: new Date(`${r.date}T00:00:00.000Z`) });
+    const state =
+      ((r as any).state as BookingState) ||
+      computeBookingState({ date: new Date(`${r.date}T00:00:00.000Z`) });
     return {
       id: r.id,
       startDate: (r as any).date, // already YYYY-MM-DD from DB
@@ -165,19 +178,64 @@ export async function listUserBookings(
   return { items, page, size, total };
 }
 
+export interface BookingCancellationAudit {
+  canceledAt?: Date | null;
+  canceledBy?: string | null; // user id
+  cancelReason?: string | null; // free-text or enum key
+}
+
+export async function getBookingCancellationAudit(
+  bookingId: string,
+): Promise<BookingCancellationAudit | null> {
+  const sql =
+    'SELECT canceled_at, canceled_by, cancel_reason FROM bookings WHERE id = $1 LIMIT 1';
+  const res = await query<Pick<DbBookingRow, 'canceled_at' | 'canceled_by' | 'cancel_reason'>>(sql, [
+    bookingId,
+  ]);
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    canceledAt: row.canceled_at ? new Date(row.canceled_at) : null,
+    canceledBy: row.canceled_by || null,
+    cancelReason: row.cancel_reason || null,
+  };
+}
+
+export async function cancelBookingForUserWithAudit(
+  bookingId: string,
+  userId: string,
+  options?: { reason?: string; todayIso?: string },
+): Promise<Booking | null> {
+  const today = options?.todayIso || new Date().toISOString().slice(0, 10);
+  const sql = `
+    UPDATE bookings
+    SET state = $3,
+        canceled_at = NOW(),
+        canceled_by = $2,
+        cancel_reason = $4,
+        updated_at = NOW()
+    WHERE id = $1 AND user_id = $2 AND date >= $5
+    RETURNING *
+  `;
+  const res = await query<DbBookingRow>(sql, [
+    bookingId,
+    userId,
+    'CANCELLATA',
+    options?.reason || 'USER_REQUEST',
+    today,
+  ]);
+  if (!res.rows[0]) return null;
+  return mapRow(res.rows[0]);
+}
+
 export async function cancelBookingForUser(
   bookingId: string,
   userId: string,
   todayIso?: string,
 ): Promise<Booking | null> {
-  const today = todayIso || new Date().toISOString().slice(0, 10);
-  const sql = `
-    UPDATE bookings
-    SET state = $3, updated_at = NOW()
-    WHERE id = $1 AND user_id = $2 AND date >= $4
-    RETURNING *
-  `;
-  const res = await query<DbBookingRow>(sql, [bookingId, userId, 'CANCELLATA', today]);
-  if (!res.rows[0]) return null;
-  return mapRow(res.rows[0]);
+  // Keep backward compatibility while ensuring audit is captured
+  return cancelBookingForUserWithAudit(bookingId, userId, {
+    reason: 'USER_REQUEST',
+    todayIso,
+  });
 }

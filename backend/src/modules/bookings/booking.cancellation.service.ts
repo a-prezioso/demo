@@ -1,17 +1,6 @@
 /**
  * Booking cancellation policy service
- *
- * Centralizes business rules for user-initiated cancellations with a 24h cutoff.
- *
- * Timezone assumptions
- * - All computations are performed in UTC.
- * - If a booking does not carry an explicit startAt (datetime), we derive it from the
- *   date-only field using the configured default start time (default 09:00 UTC).
- * - Precision: decision is based on exact hours (fractional hours allowed). Cutoff is strict:
- *   cancellation is allowed only if hoursBeforeStart > cutoffHours (e.g., strictly more than 24h).
  */
-
-import type { Booking } from './booking.model';
 
 export interface CancellationPolicyConfig {
   // When booking.startAt is not present, compute start as booking.date at this time (UTC)
@@ -28,81 +17,38 @@ export interface CancellationDecision {
   now: Date;
 }
 
-export const DEFAULT_CANCELLATION_POLICY: Required<CancellationPolicyConfig> = {
+const DEFAULTS: Required<CancellationPolicyConfig> = {
   defaultStartHourUtc: 9,
   defaultStartMinuteUtc: 0,
   cutoffHours: 24,
 };
 
-function envInt(name: string, fallback: number): number {
-  const v = process.env[name];
-  if (!v) return fallback;
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : fallback;
+export function computeStartAt(date: Date, cfg: Required<CancellationPolicyConfig>): Date {
+  const iso = date.toISOString().slice(0, 10);
+  return new Date(`${iso}T${String(cfg.defaultStartHourUtc).padStart(2, '0')}:${String(
+    cfg.defaultStartMinuteUtc,
+  ).padStart(2, '0')}:00.000Z`);
 }
 
-/**
- * Reads policy configuration from environment variables.
- * - BOOKING_DEFAULT_START_HOUR_UTC (0..23)
- * - BOOKING_DEFAULT_START_MINUTE_UTC (0..59)
- * - BOOKING_CANCELLATION_CUTOFF_HOURS (>= 0)
- */
-export function getCancellationPolicyFromEnv(): Required<CancellationPolicyConfig> {
-  return {
-    defaultStartHourUtc: envInt('BOOKING_DEFAULT_START_HOUR_UTC', DEFAULT_CANCELLATION_POLICY.defaultStartHourUtc),
-    defaultStartMinuteUtc: envInt(
-      'BOOKING_DEFAULT_START_MINUTE_UTC',
-      DEFAULT_CANCELLATION_POLICY.defaultStartMinuteUtc,
-    ),
-    cutoffHours: envInt('BOOKING_CANCELLATION_CUTOFF_HOURS', DEFAULT_CANCELLATION_POLICY.cutoffHours),
-  };
-}
-
-/**
- * Computes the UTC start datetime for a booking.
- */
-export function computeStartAtUTC(
-  booking: Pick<Booking, 'date' | 'startAt'>,
-  cfg?: CancellationPolicyConfig,
-): Date {
-  if (booking.startAt instanceof Date) return booking.startAt;
-  const policy = { ...DEFAULT_CANCELLATION_POLICY, ...(cfg || {}) } as Required<CancellationPolicyConfig>;
-  // booking.date is normalized to UTC midnight; build Date.UTC with day components from it
-  const year = booking.date.getUTCFullYear();
-  const month = booking.date.getUTCMonth(); // 0-based
-  const day = booking.date.getUTCDate();
-  const d = new Date(Date.UTC(year, month, day, policy.defaultStartHourUtc, policy.defaultStartMinuteUtc, 0, 0));
-  return d;
-}
-
-/**
- * Decides whether a booking can be canceled according to the cutoff policy.
- */
-export function decideCancellation(
-  booking: Pick<Booking, 'date' | 'startAt' | 'state'>,
-  now: Date = new Date(),
-  cfg?: CancellationPolicyConfig,
+export function canUserCancelBooking(
+  booking: { date: Date; startAt?: Date | null },
+  config?: CancellationPolicyConfig,
+  now?: Date,
 ): CancellationDecision {
-  const policy = { ...DEFAULT_CANCELLATION_POLICY, ...(cfg || {}) } as Required<CancellationPolicyConfig>;
-  const startAt = computeStartAtUTC(booking, policy);
+  const cfg = { ...DEFAULTS, ...(config || {}) } as Required<CancellationPolicyConfig>;
+  const current = now ?? new Date();
+  const start = booking.startAt ?? computeStartAt(booking.date, cfg);
+  const diffMs = start.getTime() - current.getTime();
+  const hours = diffMs / (1000 * 60 * 60);
 
-  // If already canceled by state, deny.
-  if ((booking as any).state === 'CANCELLATA') {
-    return { allowed: false, reason: 'booking.already_canceled', hoursBeforeStart: undefined, startAt, now };
+  if (hours >= cfg.cutoffHours) {
+    return { allowed: true, startAt: start, now: current, hoursBeforeStart: hours };
   }
-
-  const diffMs = startAt.getTime() - now.getTime();
-  const hoursBeforeStart = diffMs / 3600000; // may be negative
-
-  // Allowed only if strictly more than cutoff hours remain
-  const allowed = hoursBeforeStart > policy.cutoffHours;
-  return allowed
-    ? { allowed: true, hoursBeforeStart, startAt, now }
-    : {
-        allowed: false,
-        reason: 'booking.cancellation_cutoff_24h',
-        hoursBeforeStart,
-        startAt,
-        now,
-      };
+  return {
+    allowed: false,
+    reason: 'CUTOFF_24H_NOT_MET',
+    startAt: start,
+    now: current,
+    hoursBeforeStart: hours,
+  };
 }
