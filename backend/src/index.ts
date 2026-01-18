@@ -22,3 +22,4 @@ export * from './modules/bookings/booking.repository';
 export * from './api/bookings';
 export * from './modules/calendar/closure.repository';
 export * from './modules/calendar/closure.service';
+export * from './modules/bookings/booking.cancellation.service';
