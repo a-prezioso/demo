@@ -12,3 +12,4 @@ export * from './api/auth';
 export * from './db/client';
 export * from './api/auth/jwt.middleware';
 export * from './modules/sessions/session.repository';
+export * from './api/profile/profile.controller';

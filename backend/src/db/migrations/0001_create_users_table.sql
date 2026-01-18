@@ -14,6 +14,11 @@ CREATE TABLE IF NOT EXISTS users (
   status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
   verification_token TEXT NULL,
   verification_expires_at TIMESTAMPTZ NULL,
+  -- Profile fields
+  first_name TEXT NULL,
+  last_name TEXT NULL,
+  avatar_url TEXT NULL,
+  avatar_id TEXT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
