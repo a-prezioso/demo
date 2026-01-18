@@ -13,3 +13,6 @@ export * from './db/client';
 export * from './api/auth/jwt.middleware';
 export * from './modules/sessions/session.repository';
 export * from './api/profile/profile.controller';
+export * from './modules/desks/desk.model';
+export * from './modules/desks/desk.repository';
+export * from './api/desks/desks.controller';
