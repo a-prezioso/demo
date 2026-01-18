@@ -3,7 +3,7 @@
  */
 
 import { query } from '../../db/client';
-import type { Booking, BookingStatus } from './booking.model';
+import type { Booking, BookingStatus, BookingState } from './booking.model';
 
 interface DbBookingRow {
   id: string;
@@ -11,6 +11,7 @@ interface DbBookingRow {
   desk_id: string;
   date: string; // YYYY-MM-DD
   status: string;
+  state?: string; // new column
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +23,7 @@ function mapRow(row: DbBookingRow): Booking {
     deskId: row.desk_id,
     date: new Date(`${row.date}T00:00:00.000Z`),
     status: (row.status as BookingStatus) || 'confirmed',
+    state: ((row as any).state as BookingState) || 'ATTIVA',
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };
@@ -78,6 +80,7 @@ export interface UserBookingItemDto {
   status: string; // keep as string for UI
   notes?: string | null;
   tags?: string[] | null;
+  state?: BookingState; // expose new state in DTO
 }
 
 export interface PagedResult<T> {
@@ -90,7 +93,7 @@ export interface PagedResult<T> {
 /**
  * Returns user bookings ordered chronologically:
  * - future first by date ASC
- * - then past by date DESC
+ * - then past (< today) descending by date
  * Allows pagination via page/size.
  */
 export async function listUserBookings(
@@ -138,6 +141,7 @@ export async function listUserBookings(
     status: (r as any).status,
     notes: null,
     tags: null,
+    state: ((r as any).state as BookingState) || 'ATTIVA',
   }));
 
   return { items, page, size, total };
