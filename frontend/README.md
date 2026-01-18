@@ -1,23 +1,9 @@
-Frontend scaffolding for SmartDesk PWA
+Testing setup
 
-This folder contains minimal React components and hooks for authentication UI.
+- Jest configured via root jest.config.js with a frontend project using jsdom.
+- React Testing Library is used for UI tests.
+- Tests live under frontend/src/**/__tests__ and as *.test.ts(x).
 
-Components
-- AuthPage: combined login/signup screen with basic client-side validation, loading states, and backend error handling. It accepts optional i18n function and onSuccess callback.
+Run tests
 
-Hooks
-- useAuth: manages local auth state in localStorage and exposes login/signup/logout functions.
-
-API Client
-- authClient.ts: small fetch-based client for /auth/login and /auth/signup endpoints.
-
-Integration
-- Import AuthPage and mount it in your router. Example:
-
-import { AuthPage } from './src/components/Auth';
-
-<AuthPage baseUrl="/api" onSuccess={() => navigate('/')} i18n={(k) => translations[k] || k} />
-
-Notes
-- The API baseUrl defaults to '/api'. Adjust based on your backend routing.
-- Error messages use error codes; provide i18n mapping for user-friendly texts.
+- npm test (from repository root)
