@@ -32,6 +32,7 @@ enum BookingState {
   PASSATA
   ATTIVA
   CANCELLATA
+  CANCELLATA_DA_UTENTE
   @@map("booking_state")
 }
 
@@ -110,7 +111,7 @@ model Booking {
   user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("bookings")
-  @@unique([deskId, date, timeSlot], map: "uq_booking_unique")
+  @@unique([deskId, date, timeSlot], map: "uq_booking_unique_active")
   @@index([userId], map: "idx_bookings_user_id")
   @@index([date], map: "idx_bookings_date")
   @@index([state], map: "idx_bookings_state")
