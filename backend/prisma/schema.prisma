@@ -1,0 +1,38 @@
+// Prisma schema for SmartDesk Coworking - User model
+// Datasource and generator
+// Note: Ensure DATABASE_URL is provided in environment (e.g., postgres connection string)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Account status for users
+enum AccountStatus {
+  ACTIVE
+  PENDING_VERIFICATION
+  SUSPENDED
+  DISABLED
+}
+
+/// User model
+/// IMPORTANT: Do not log sensitive fields (passwordHash, salt, verificationToken)
+model User {
+  id                     String         @id @default(uuid()) @db.Uuid
+  email                  String         @unique @db.VarChar(320)
+  passwordHash           String         @map("password_hash") @db.VarChar(255)
+  salt                   String?        @map("salt") @db.VarChar(255)
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
+  status                 AccountStatus  @default(ACTIVE) @map("status")
+  verificationToken      String?        @map("verification_token") @db.VarChar(255)
+  verificationExpiresAt  DateTime?      @map("verification_expires_at")
+
+  @@map("users")
+  @@index([createdAt], map: "idx_users_created_at")
+  @@index([verificationToken], map: "idx_users_verification_token")
+}
