@@ -15,11 +15,35 @@ export const refreshRouter: Router = express.Router();
 const jwt = new JwtService();
 const sessions = new InMemorySessionRepository();
 
+// Small helper to parse cookies without extra deps
+const parseCookieHeader = (cookieHeader?: string | string[]): Record<string, string> => {
+  if (!cookieHeader) return {};
+  const header = Array.isArray(cookieHeader) ? cookieHeader.join(';') : cookieHeader;
+  return header.split(';').reduce<Record<string, string>>((acc, part) => {
+    const [rawK, ...rest] = part.trim().split('=');
+    if (!rawK) return acc;
+    const k = decodeURIComponent(rawK.trim());
+    const v = decodeURIComponent(rest.join('=') || '');
+    if (k) acc[k] = v;
+    return acc;
+  }, {});
+};
+
+const extractRefreshToken = (req: Request): string | null => {
+  // Prefer HttpOnly cookie (typical names: refreshToken or rt), fallback to body
+  const cookies = parseCookieHeader(req.headers['cookie'] as any);
+  const fromCookie = cookies['refreshToken'] || cookies['rt'];
+  if (fromCookie && typeof fromCookie === 'string' && fromCookie.length > 0) return fromCookie;
+
+  const fromBody = (req.body && typeof req.body.refreshToken === 'string') ? req.body.refreshToken : null;
+  return fromBody || null;
+};
+
 // POST /api/auth/refresh
-// Body: { refreshToken: string }
+// Body: { refreshToken: string } (optional if cookie provided)
 refreshRouter.post('/refresh', async (req: Request, res: Response, _next: NextFunction) => {
   try {
-    const { refreshToken } = req.body || {};
+    const refreshToken = extractRefreshToken(req);
     if (!refreshToken || typeof refreshToken !== 'string') {
       return res.status(400).json({ error: 'invalid_input' });
     }
@@ -66,14 +90,19 @@ refreshRouter.post('/refresh', async (req: Request, res: Response, _next: NextFu
 // Body: { refreshToken?: string, all?: boolean }
 refreshRouter.post('/logout', async (req: Request, res: Response, _next: NextFunction) => {
   try {
-    const { refreshToken, all } = req.body || {};
+    const cookies = parseCookieHeader(req.headers['cookie'] as any);
+    const tokenFromCookie = cookies['refreshToken'] || cookies['rt'];
+    const tokenFromBody = req.body?.refreshToken;
+    const providedToken = (typeof tokenFromCookie === 'string' && tokenFromCookie) ? tokenFromCookie : tokenFromBody;
+
+    const { all } = req.body || {};
 
     if (all === true) {
       // Require token to identify the user/session
-      if (!refreshToken || typeof refreshToken !== 'string') {
+      if (!providedToken || typeof providedToken !== 'string') {
         return res.status(400).json({ error: 'invalid_input' });
       }
-      const hash = hashRefreshToken(refreshToken);
+      const hash = hashRefreshToken(providedToken);
       const rec = await sessions.findByTokenHash(hash);
       if (rec) {
         await sessions.revokeAllForUser(rec.userId);
@@ -81,11 +110,11 @@ refreshRouter.post('/logout', async (req: Request, res: Response, _next: NextFun
       return res.status(204).send();
     }
 
-    if (!refreshToken || typeof refreshToken !== 'string') {
+    if (!providedToken || typeof providedToken !== 'string') {
       return res.status(400).json({ error: 'invalid_input' });
     }
 
-    const hash = hashRefreshToken(refreshToken);
+    const hash = hashRefreshToken(providedToken);
     await sessions.revokeByTokenHash(hash);
     return res.status(204).send();
   } catch (_err) {
