@@ -8,6 +8,7 @@ export function registerAuthRoutes(router: Router, usersRepo: IUserRepository): 
   const ctrl = AuthController.build(usersRepo);
 
   router.post('/api/auth/signup', ctrl.signup);
+  router.post('/api/auth/login', ctrl.login);
 
   return router;
 }

@@ -39,8 +39,7 @@ function cryptoRandomId(): string {
   const b = typeof crypto !== 'undefined' && (crypto as any).getRandomValues
     ? (crypto as any).getRandomValues(new Uint8Array(16))
     : require('crypto').randomBytes(16);
-  const arr = b instanceof Buffer ? new Uint8Array(b) : b;
-  // Convert to UUID-like string
+  const arr = b instanceof Buffer ? new Uint8Array(b) : (b as Uint8Array);
   const hex = Array.from(arr).map((x) => x.toString(16).padStart(2, '0')).join('');
-  return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}`;
+  return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}`;
 }
