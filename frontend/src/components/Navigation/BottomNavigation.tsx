@@ -1,8 +1,7 @@
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 
 export type BottomNavigationProps = {
-  // Base path where the main app routes are mounted (e.g., '/app')
   basePath?: string;
 };
 
@@ -12,12 +11,10 @@ export type BottomNavigationProps = {
  * - Uses NavLink to reflect active route state
  * - Touch-friendly minimum sizes
  */
-export const BottomNavigation: React.FC<BottomNavigationProps> = ({ basePath = '/app' }) => {
-  const location = useLocation();
-
+export const BottomNavigation: React.FC<BottomNavigationProps> = ({ basePath = '' }) => {
   const items = [
-    { key: 'map', label: 'Mappa', to: basePath },
-    { key: 'bookings', label: "Le mie prenotazioni", to: `${basePath}/bookings` },
+    { key: 'map', label: 'Mappa', to: `${basePath}/` },
+    { key: 'bookings', label: 'Le mie prenotazioni', to: `${basePath}/bookings` },
   ];
 
   return (
@@ -27,11 +24,11 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ basePath = '
           key={item.key}
           to={item.to}
           aria-label={item.label}
+          end={item.to.endsWith('/')}
           style={({ isActive }) => ({
             ...styles.link,
             ...(isActive ? styles.linkActive : {}),
           })}
-          aria-current={location.pathname === item.to || (item.to === basePath && location.pathname === `${basePath}/`) ? 'page' : undefined}
         >
           <span style={styles.linkLabel}>{item.label}</span>
         </NavLink>
