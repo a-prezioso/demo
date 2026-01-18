@@ -14,6 +14,7 @@ const config: Config = {
     'src/core/security/**/*.ts',
     'src/core/validation/**/*.ts',
     'src/modules/user/domain/entities/**/*.ts',
+    'src/modules/desks/**/*.ts',
     '!**/*.spec.ts',
   ],
   coverageDirectory: '<rootDir>/coverage-unit',

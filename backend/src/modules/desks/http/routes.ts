@@ -1,14 +1,9 @@
 import { Router } from 'express';
-import { DeskController } from './DeskController';
-import type { IDeskRepository } from '../repository/DeskRepository';
+import type { IDesksRepository } from '../repository/DesksRepository';
+import { DesksController } from './DesksController';
 
-// Registers desk status routes under /api/postazioni
-// Example usage in app: app.use('/', registerDeskRoutes(express.Router(), new InMemoryDeskRepository()))
-export function registerDeskRoutes(router: Router, repo: IDeskRepository): Router {
-  const ctrl = DeskController.build(repo);
-
-  // GET /api/postazioni/status
-  router.get('/api/postazioni/status', ctrl.getStatuses);
-
+export function registerDeskRoutes(router: Router, repo: IDesksRepository): Router {
+  const ctrl = DesksController.build(repo);
+  router.get('/api/desks', ctrl.getDesks);
   return router;
 }
