@@ -93,6 +93,8 @@ export interface ListUserBookingsOptions {
   page?: number; // 1-based
   size?: number; // page size
   nowIsoDate?: string; // optional override for testing, format YYYY-MM-DD
+  // New: filter by computed application state (ATTIVA | PASSATA | CANCELLATA)
+  state?: BookingState | 'ALL';
 }
 
 export interface UserBookingItemDto {
@@ -118,6 +120,7 @@ export interface PagedResult<T> {
  * - future first by date ASC
  * - then past (< today) descending by date
  * Allows pagination via page/size.
+ * Supports optional state filter (ATTIVA | PASSATA | CANCELLATA).
  */
 export async function listUserBookings(
   userId: string,
@@ -130,32 +133,73 @@ export async function listUserBookings(
   // Determine today (UTC date)
   const todayIso = opts?.nowIsoDate || new Date().toISOString().slice(0, 10);
 
-  const excludeCanceled = opts?.includeCanceled ? false : true;
-  const activePredicate = excludeCanceled ? "AND (state IS NULL OR state <> 'CANCELLATA')" : '';
+  const notCanceledPredicate = "(state IS NULL OR state <> 'CANCELLATA')";
 
-  // We build a UNION ALL query to get future (>= today) ascending then past (< today) descending
-  const sql = `
-    WITH future AS (
-      SELECT *, 0 AS bucket FROM bookings WHERE user_id = $1 AND date >= $2 ${activePredicate}
-    ), past AS (
-      SELECT *, 1 AS bucket FROM bookings WHERE user_id = $1 AND date < $2 ${activePredicate}
-    ), concat AS (
-      SELECT * FROM future
-      UNION ALL
-      SELECT * FROM past
-    )
-    SELECT * FROM concat
-    ORDER BY bucket ASC,
-      CASE WHEN bucket = 0 THEN date END ASC NULLS LAST,
-      CASE WHEN bucket = 1 THEN date END DESC NULLS LAST
-    OFFSET $3 LIMIT $4
-  `;
+  const stateFilter = (opts?.state || 'ALL') as BookingState | 'ALL';
 
-  const countSql = `SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1 ${activePredicate}`;
+  let dataSql = '';
+  let countSql = '';
+  let params: any[] = [];
+
+  if (stateFilter === 'ATTIVA') {
+    // Future or today, not canceled
+    dataSql = `
+      SELECT * FROM bookings
+      WHERE user_id = $1 AND date >= $2 AND ${notCanceledPredicate}
+      ORDER BY date ASC
+      OFFSET $3 LIMIT $4
+    `;
+    countSql = `SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1 AND date >= $2 AND ${notCanceledPredicate}`;
+    params = [userId, todayIso, offset, size];
+  } else if (stateFilter === 'PASSATA') {
+    // Past, not canceled
+    dataSql = `
+      SELECT * FROM bookings
+      WHERE user_id = $1 AND date < $2 AND ${notCanceledPredicate}
+      ORDER BY date DESC
+      OFFSET $3 LIMIT $4
+    `;
+    countSql = `SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1 AND date < $2 AND ${notCanceledPredicate}`;
+    params = [userId, todayIso, offset, size];
+  } else if (stateFilter === 'CANCELLATA') {
+    // Explicitly canceled
+    dataSql = `
+      SELECT * FROM bookings
+      WHERE user_id = $1 AND state = 'CANCELLATA'
+      ORDER BY canceled_at DESC NULLS LAST, date DESC
+      OFFSET $2 LIMIT $3
+    `;
+    countSql = `SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1 AND state = 'CANCELLATA'`;
+    params = [userId, offset, size];
+  } else {
+    // Default ALL: keep existing union logic while excluding canceled unless includeCanceled
+    const excludeCanceled = opts?.includeCanceled ? false : true;
+    const activePredicate = excludeCanceled ? `AND ${notCanceledPredicate}` : '';
+
+    dataSql = `
+      WITH future AS (
+        SELECT *, 0 AS bucket FROM bookings WHERE user_id = $1 AND date >= $2 ${activePredicate}
+      ), past AS (
+        SELECT *, 1 AS bucket FROM bookings WHERE user_id = $1 AND date < $2 ${activePredicate}
+      ), concat AS (
+        SELECT * FROM future
+        UNION ALL
+        SELECT * FROM past
+      )
+      SELECT * FROM concat
+      ORDER BY bucket ASC,
+        CASE WHEN bucket = 0 THEN date END ASC NULLS LAST,
+        CASE WHEN bucket = 1 THEN date END DESC NULLS LAST
+      OFFSET $3 LIMIT $4
+    `;
+
+    countSql = `SELECT COUNT(1) AS c FROM bookings WHERE user_id = $1 ${activePredicate}`;
+    params = [userId, todayIso, offset, size];
+  }
 
   const [dataRes, countRes] = await Promise.all([
-    query<DbBookingRow & { bucket: number }>(sql, [userId, todayIso, offset, size]),
-    query<{ c: string }>(countSql, [userId]),
+    query<DbBookingRow & { bucket?: number }>(dataSql, params),
+    query<{ c: string }>(countSql, [userId, ...(dataSql.includes('$2') && countSql.includes('$2') ? [todayIso] : [])]),
   ]);
 
   const total = countRes.rows[0] ? parseInt((countRes.rows[0] as any).c, 10) : 0;

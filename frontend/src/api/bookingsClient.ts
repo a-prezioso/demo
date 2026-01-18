@@ -15,7 +15,10 @@ export type ListMyBookingsResponse = {
   items: UserBookingItemDto[];
   page: number;
   size: number;
-  hasMore: boolean;
+  total?: number; // optional for backward compat
+  totalPages?: number;
+  hasNext?: boolean;
+  hasPrevious?: boolean;
 };
 
 async function safeJson(res: Response): Promise<any | null> {
@@ -23,14 +26,16 @@ async function safeJson(res: Response): Promise<any | null> {
 }
 
 export async function listMyBookings(
-  params: { page?: number; size?: number } = {},
+  params: { page?: number; size?: number; status?: 'ATTIVA' | 'PASSATA' | 'CANCELLATA' | 'ALL' } = {},
   opts?: BookingsClientOptions,
   accessToken?: string,
 ): Promise<ListMyBookingsResponse> {
   const base = opts?.baseUrl || '/api';
   const page = params.page ?? 1;
   const size = params.size ?? 20;
-  const res = await fetch(`${base}/bookings/my?page=${page}&size=${size}`, {
+  const status = params.status || 'ALL';
+  const qs = new URLSearchParams({ page: String(page), size: String(size), status });
+  const res = await fetch(`${base}/bookings/my?${qs.toString()}` , {
     headers: {
       'Content-Type': 'application/json',
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -43,7 +48,7 @@ export async function listMyBookings(
   }
   const data = await res.json();
   if (Array.isArray(data)) {
-    return { items: data as UserBookingItemDto[], page, size, hasMore: (data as any[]).length === size };
+    return { items: data as UserBookingItemDto[], page, size, hasNext: (data as any[]).length === size };
     }
   return data as ListMyBookingsResponse;
 }

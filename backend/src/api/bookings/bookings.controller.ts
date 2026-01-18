@@ -118,7 +118,7 @@ export async function createBookingHandler(req: AuthenticatedRequestLike & { bod
   await handleCreate(userId, String(deskId || ''), String(date || ''), res);
 }
 
-// Handler for GET /api/bookings/me?page=&size=&includeCanceled=
+// Handler for GET /api/bookings/me?page=&size=&includeCanceled=&state=
 export async function listMyBookingsHandler(req: AuthenticatedRequestLike & { query?: any }, res: ResponseLike) {
   const userId = getAuthUserId(req, null);
   if (!userId) {
@@ -128,9 +128,12 @@ export async function listMyBookingsHandler(req: AuthenticatedRequestLike & { qu
   const page = Number((req as any)?.query?.page || 1);
   const size = Number((req as any)?.query?.size || 20);
   const includeCanceled = String((req as any)?.query?.includeCanceled || 'false') === 'true';
+  const stateParamRaw = String((req as any)?.query?.status || (req as any)?.query?.state || 'ALL').toUpperCase();
+  const allowedStates = ['ALL', 'ATTIVA', 'PASSATA', 'CANCELLATA'];
+  const stateParam = allowedStates.includes(stateParamRaw) ? (stateParamRaw as any) : 'ALL';
 
   try {
-    const result = await listUserBookings(userId, { page, size, includeCanceled });
+    const result = await listUserBookings(userId, { page, size, includeCanceled, state: stateParam });
     // Ensure each item has a state computed by backend logic
     const items = (result.items || []).map((it: any) => {
       if (it && it.state) return it;
@@ -139,10 +142,18 @@ export async function listMyBookingsHandler(req: AuthenticatedRequestLike & { qu
       const computed = d ? computeBookingState({ date: d }) : 'ATTIVA';
       return { ...it, state: computed };
     });
+
+    const totalPages = Math.max(1, Math.ceil((result.total || 0) / result.size));
+    const hasNext = page < totalPages;
+    const hasPrevious = page > 1 && result.total > 0;
+
     res.status(200).json({
       page: result.page,
       size: result.size,
       total: result.total,
+      totalPages,
+      hasNext,
+      hasPrevious,
       items,
     });
   } catch (_e) {
