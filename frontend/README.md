@@ -52,3 +52,7 @@ Notes:
 - AuthProvider initializes from localStorage to keep session after refresh.
 - ProtectedRoute/WithAuthGuard components are router-agnostic; provide a Redirector compatible with your router.
 - AuthPage accepts a navigate callback to programmatically redirect after successful login/signup.
+
+Authentication docs
+For a detailed overview of the frontend authentication architecture, token persistence and protected routes, see:
+- docs/authentication.md
