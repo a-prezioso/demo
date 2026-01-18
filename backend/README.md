@@ -13,6 +13,8 @@ Current scope
 - Login controller for issuing tokens
 - Migration for user_sessions table (refresh token tracking)
 - JWT auth middleware (authGuard) to protect reserved routes
+- Refresh/Logout controllers for token rotation and revocation
+- Migration to add JTI and revocation metadata to user_sessions
 
 Notes
 - Email is stored as CITEXT and is unique (case-insensitive)
@@ -23,25 +25,17 @@ Notes
 - The signup handler validates inputs, handles unique violations (409), and returns 201 with non-sensitive fields only.
 - Login handler validates credentials and returns access and refresh JWTs. Persist refresh token hash in user_sessions when wiring a DB-backed session service.
 - authGuard validates access tokens from Authorization header and sets req.user; missing/invalid -> 401, missing roles -> 403.
+- refreshHandler validates refresh tokens, rotates the session (single-use), and returns new tokens.
 
 JWT configuration
-- JWT_SECRET (required): HMAC secret key
-- JWT_ISSUER (optional): iss claim
-- JWT_AUDIENCE (optional): aud claim
-- JWT_ACCESS_TTL (default 15m)
-- JWT_REFRESH_TTL (default 7d)
+- JWT_SECRET (required), JWT_ISSUER (optional), JWT_AUDIENCE (optional)
+- JWT_ACCESS_TTL (default 15m), JWT_REFRESH_TTL (default 7d)
 
-Wiring the HTTP framework
-- This repo does not include Express/Fastify setup yet. The auth controller exposes signupHandler and loginHandler which can be mounted in a future task.
-- The `db/client.ts` expects a PostgreSQL connection via `DATABASE_URL` or PG* env vars.
-- To protect reserved APIs (e.g., /api/private/**), apply the authGuard middleware in your HTTP server. See docs/secure-routing.md for an example.
+Sessions/Refresh tokens
+- Table user_sessions stores only SHA-256 hash of refresh tokens.
+- Columns include user_id, refresh_token_hash, user_agent, ip_address, created_at, expires_at, revoked_at
+- Additional metadata: jti, revoked_by, revoke_reason (migration 0003)
+- Repository provides: createUserSession, findActiveSessionByHash, findSessionByJti, rotateSessionToken, revokeSessionById, revokeAllSessionsForUser, deleteExpiredSessions
 
-Diagrams (high-level)
-Auth flow (login):
-- Client -> POST /auth/login {email,password}
-- API -> validate -> verifyPassword -> issue access token (15m) + refresh token (7d)
-- (Optional) persist refresh_token_hash in user_sessions with expires_at
-- Client stores access token (memory) and refresh token (httpOnly cookie or secure storage)
-
-Data model additions:
-- user_sessions(id, user_id, refresh_token_hash, user_agent, ip_address, created_at, expires_at, revoked_at)
+Cleanup
+- See docs/token-cleanup.md for a simple periodic cleanup approach to delete expired sessions.

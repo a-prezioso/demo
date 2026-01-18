@@ -5,7 +5,7 @@
  * - POST /auth/logoutAll: revokes all sessions for the authenticated user (requires auth middleware)
  */
 
-import { verifyJwt, signAccessToken, signRefreshToken, hashRefreshToken } from '../../security/jwt.service';
+import { verifyJwt, signAccessToken, signRefreshToken, hashRefreshToken, decodeJwt } from '../../security/jwt.service';
 import type { RequestLike, ResponseLike } from './auth.controller';
 import type { AuthenticatedRequestLike } from './jwt.middleware';
 import { findActiveSessionByHash, rotateSessionToken, revokeSessionById, revokeAllSessionsForUser } from '../../modules/sessions/session.repository';
@@ -98,9 +98,12 @@ export async function refreshHandler(req: RequestLike, res: ResponseLike): Promi
       const newHash = hashRefreshToken(newRefresh.token);
       const userAgent = (req as any).headers?.['user-agent'] || (req as any).headers?.['User-Agent'] || null;
       const ip = (req as any).ip || (req as any).ipAddress || (req as any).headers?.['x-forwarded-for'] || null;
+      const decoded = decodeJwt(newRefresh.token) as any;
+      const newJti = decoded && decoded.jti ? String(decoded.jti) : null;
       await rotateSessionToken(session.id, newHash, newRefresh.expiresAt, {
         userAgent: typeof userAgent === 'string' ? userAgent : null,
         ipAddress: typeof ip === 'string' ? ip : null,
+        jti: newJti,
       });
     } catch (_e) {
       // If rotation fails for any reason, revoke the current session to prevent token reuse

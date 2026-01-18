@@ -6,7 +6,7 @@
 import { verifyPassword } from '../../security/password.service';
 import { findUserByEmail } from '../../modules/users/user.repository';
 import { UserStatus } from '../../modules/users/user.model';
-import { signAccessToken, signRefreshToken, hashRefreshToken } from '../../security/jwt.service';
+import { signAccessToken, signRefreshToken, hashRefreshToken, decodeJwt } from '../../security/jwt.service';
 import { validateEmail } from '../../security/validation.service';
 import { createUserSession } from '../../modules/sessions/session.repository';
 
@@ -53,12 +53,15 @@ export async function loginHandler(req: RequestLike, res: ResponseLike): Promise
       const refreshHash = hashRefreshToken(refresh.token);
       const userAgent = (req as any).headers?.['user-agent'] || (req as any).headers?.['User-Agent'] || null;
       const ip = (req as any).ip || (req as any).ipAddress || (req as any).headers?.['x-forwarded-for'] || null;
+      const decoded = decodeJwt(refresh.token) as any;
+      const jti = decoded && decoded.jti ? String(decoded.jti) : null;
       await createUserSession({
         userId: user.id,
         refreshTokenHash: refreshHash,
         expiresAt: refresh.expiresAt,
         userAgent: typeof userAgent === 'string' ? userAgent : null,
         ipAddress: typeof ip === 'string' ? ip : null,
+        jti,
       });
     } catch (_e) {
       // Do not fail login if session persistence fails; log in real app
