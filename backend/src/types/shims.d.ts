@@ -9,3 +9,15 @@ declare module 'argon2';
 declare module 'bcrypt';
 declare module 'bcryptjs';
 declare module 'pg';
+
+declare module 'ts-jest';
+
+// Jest globals (to let tsc compile tests without @types/jest)
+declare function describe(name: string, fn: () => void): void;
+declare function it(name: string, fn: () => any): void;
+declare function test(name: string, fn: () => any): void;
+declare function expect(actual: any): any;
+
+declare module 'jest' {
+  export interface Config {}
+}

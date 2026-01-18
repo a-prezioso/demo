@@ -189,3 +189,21 @@ export async function verifyPassword(plainPassword: string, passwordHash: string
   // No suitable library found
   return false;
 }
+
+/**
+ * Test-only hooks: allow injecting fake argon2/bcrypt providers for unit tests
+ * without introducing external dependencies. Not for production use.
+ */
+export function __setHashProvidersForTests(providers: { argon2?: any; bcrypt?: any }): void {
+  if (providers && 'argon2' in providers) {
+    _argon2 = providers.argon2 || null;
+  }
+  if (providers && 'bcrypt' in providers) {
+    _bcrypt = providers.bcrypt || null;
+  }
+}
+
+export function __resetHashProvidersForTests(): void {
+  _argon2 = null;
+  _bcrypt = null;
+}
