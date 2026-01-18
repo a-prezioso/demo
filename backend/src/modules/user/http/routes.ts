@@ -20,5 +20,13 @@ export function registerAuthRoutes(router: Router, usersRepo: IUserRepository): 
     return res.json({ success: true, data: { id: user.id, email: user.email, roles: user.roles || [] } });
   });
 
+  // Apply JWT guard to all private endpoints
+  router.use('/api/private', jwtAuthGuard());
+
+  // Example private endpoint
+  router.get('/api/private/health', (req: any, res) => {
+    return res.json({ success: true, data: { status: 'ok', userId: req.user?.id } });
+  });
+
   return router;
 }

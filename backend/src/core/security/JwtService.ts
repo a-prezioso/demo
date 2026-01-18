@@ -163,6 +163,14 @@ export class JwtService {
       if (typeof payload?.exp !== 'number' || nowSec >= payload.exp) {
         throw tokenError('TOKEN_EXPIRED', 'Token expired');
       }
+      // iat check must be a number and not too far in the future
+      if (typeof payload?.iat !== 'number') {
+        throw tokenError('TOKEN_INVALID_IAT', 'Invalid token iat');
+      }
+      // Optional: allow small clock skew (e.g., 60s)
+      if (payload.iat > nowSec + 60) {
+        throw tokenError('TOKEN_INVALID_IAT', 'Token iat in the future');
+      }
       // Optional: nbf check
       if (typeof payload?.nbf === 'number' && nowSec < payload.nbf) {
         throw tokenError('TOKEN_NOT_YET_VALID', 'Token not yet valid');
