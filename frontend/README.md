@@ -29,37 +29,49 @@ Data model (stored client-side)
 - Session restore: AuthProvider initializes its state from tokenStorage.getAuthState() at mount and keeps it in sync via setAuthState().
 
 Where and how tokens are used
-- accessToken: set as Authorization: Bearer on API client when calling protected resources
-- refreshToken: used only by authService when handling refresh flow (not exposed to UI components)
+- On login, authService.login(email, password) calls POST /api/auth/login and stores tokens in tokenStorage.
+- On logout, authService.logout() clears state and storage.
+- Access tokens are attached to API requests via httpClient (frontend/src/auth/httpClient.ts) when needed.
 
 ---
 
-Desk booking flow (UI)
+Navigation, routing and selected date context
 
-- DashboardPage: users can tap a free desk to open BookingConfirmationDialog.
-- BookingConfirmationDialog: shows desk id/name and selected date; on confirm triggers an async booking action.
+Bottom navigation
+- Component: frontend/src/components/Navigation/BottomNavigation.tsx
+- Purpose: persistent bottom bar to switch between main areas
+- Default entries:
+  - Mappa: /dashboard/mappa
+  - Le mie prenotazioni: /dashboard/prenotazioni
+- Uses NavLink from react-router-dom to reflect active state; accessible via role="navigation" and aria-label
+- Styling: fixed at bottom, touch-friendly targets
 
-Integration points
-- bookingClient (frontend/src/api/bookingClient.ts): service facade for creating bookings.
-  - Tries POST /desks/{deskId}/book with body { date: 'YYYY-MM-DD' }.
-  - If 404, tries POST /bookings with body { deskId, date, userId? }.
-  - If both fail or network error: returns a stubbed successful response so the UI flow remains testable.
-- DashboardPage integrates bookingClient in handleConfirm:
-  - Passes deskId, date, and userId from AuthContext (for stub only; backend should infer from access token).
-  - On success: closes popup and refreshes desk statuses.
-  - On error: shows an inline error in dialog title and keeps the popup open.
+Routing schema
+- Main routes under /dashboard/* with views:
+  - /dashboard/mappa (map view)
+  - /dashboard/prenotazioni (my bookings)
+- Shared query param: ?date=YYYY-MM-DD preserved across navigation
+- Protected routes can be implemented via ProtectedRoute around /dashboard
 
-Expected backend API (proposal)
-- POST /api/desks/{deskId}/book
-  - Auth: Bearer access token required
-  - Body: { date: 'YYYY-MM-DD' }
-  - Response: { bookingId: string, status: 'confirmed' | 'pending', deskId: string, date: string }
-  - Errors:
-    - 400 invalid_input (invalid date)
-    - 404 desk_not_found
-    - 409 desk_already_booked
-    - 401 unauthorized
+Selected date state management
+- Context: frontend/src/context/SelectedDateContext.tsx
+  - API: useSelectedDate() -> { date: string; setDate(next: string | Date) }
+  - Provider: <SelectedDateProvider>
+- Initialization: reads ?date from URL on mount; defaults to today if missing/invalid
+- Sync behavior:
+  - When date changes, updates the current URL query with navigate(..., { replace: true }) to avoid history bloat
+  - When URL query changes (deep link), updates internal state if valid
+- Consumers:
+  - Map page updates the date via setDate
+  - My bookings page reads date to filter data
 
-Notes
-- The stub path is temporary and can be removed once the backend endpoint is available.
-- The UI refreshes desk status after booking so the booked desk flips to busy/occupied state.
+Extending bottom navigation
+- Add new items in BottomNavigation.tsx items array: { key, label, to }
+- Create corresponding route under /dashboard
+- If the new section depends on selected date, read it via useSelectedDate(); avoid manual query handling
+
+Tests
+- Component tests for bottom nav under frontend/src/components/Navigation/__tests__
+- Suggested tests for date context under frontend/src/context/__tests__ (sync rules, validation)
+
+For a detailed guide, see frontend/docs/navigation-routing.md
