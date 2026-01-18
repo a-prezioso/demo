@@ -7,6 +7,7 @@ import { loginRouter } from './modules/auth/interfaces/http/loginRoute';
 import { refreshRouter } from './modules/auth/interfaces/http/refreshRoutes';
 import { logger } from './core/logging/logger';
 import { requireAuth, requireRoles } from './core/jwt/authMiddleware';
+import { JwtService } from './core/jwt/jwtService';
 
 const app = express();
 app.use(express.json());
@@ -16,14 +17,24 @@ app.use('/api/auth', authRouter);
 app.use('/api/auth', loginRouter);
 app.use('/api/auth', refreshRouter);
 
+// Protected API group: apply JWT middleware to all /api/private/**
+const jwt = new JwtService();
+app.use('/api/private', requireAuth({ jwt }));
+
 // Example protected routes pattern (for future reuse)
-app.get('/api/protected/profile', requireAuth(), (req, res) => {
+app.get('/api/protected/profile', requireAuth({ jwt }), (req, res) => {
   const user = (req as any).user;
   return res.status(200).json({ profile: { id: user?.id, email: user?.email, roles: user?.roles || [] } });
 });
 
-app.get('/api/admin/overview', requireRoles(['admin']), (req, res) => {
+app.get('/api/admin/overview', requireRoles(['admin'], { jwt }), (req, res) => {
   return res.status(200).json({ ok: true });
+});
+
+// Example private route under /api/private
+app.get('/api/private/ping', (req, res) => {
+  const user = (req as any).user;
+  return res.status(200).json({ pong: true, userId: user?.id });
 });
 
 // Health endpoint

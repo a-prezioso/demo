@@ -119,11 +119,28 @@ export class JwtService {
       throw new Error('invalid_signature');
     }
 
+    // Current time (seconds) and optional clock skew
+    const now = Math.floor(Date.now() / 1000);
+    const skew = getEnvInt('JWT_CLOCK_SKEW_SEC', 30);
+
     // Validate exp
     if (typeof payload.exp === 'number') {
-      const now = Math.floor(Date.now() / 1000);
       if (now >= payload.exp) {
         throw new Error('token_expired');
+      }
+    }
+
+    // Validate not-before (nbf)
+    if (typeof payload.nbf === 'number') {
+      if (now + skew < payload.nbf) {
+        throw new Error('token_not_yet_valid');
+      }
+    }
+
+    // Validate issued-at (iat) not in the future beyond skew
+    if (typeof payload.iat === 'number') {
+      if (payload.iat > now + skew) {
+        throw new Error('token_issued_in_future');
       }
     }
 
