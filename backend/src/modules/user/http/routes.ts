@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { IUserRepository } from '../repository/UserRepository';
 import { AuthController } from './AuthController';
+import { jwtAuthGuard } from '../../auth/http';
 
 // Registers auth routes on the provided router under /api/auth
 // Example: router -> app, use app.use('/', registerAuthRoutes(router, repo))
@@ -9,6 +10,13 @@ export function registerAuthRoutes(router: Router, usersRepo: IUserRepository): 
 
   router.post('/api/auth/signup', ctrl.signup);
   router.post('/api/auth/login', ctrl.login);
+
+  // Example protected route pattern (placeholder): returns current user info
+  router.get('/api/auth/me', jwtAuthGuard(), (req: any, res) => {
+    const user = req.user || null;
+    if (!user) return res.status(401).json({ success: false, error: { message: 'Unauthorized' } });
+    return res.json({ success: true, data: { id: user.id, email: user.email, roles: user.roles || [] } });
+  });
 
   return router;
 }

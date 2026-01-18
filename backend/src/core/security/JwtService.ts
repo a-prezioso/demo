@@ -5,7 +5,7 @@
  * - Refresh token: cryptographically random opaque token; only HMAC-SHA256 hash stored
  */
 
-import { createHmac, randomBytes } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
 export interface JwtServiceConfig {
   issuer?: string;
@@ -40,6 +40,12 @@ function base64url(input: Buffer | string): string {
     .replace(/\//g, '_');
 }
 
+function base64urlDecode(input: string): Buffer {
+  const s = input.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
+  return Buffer.from(s + pad, 'base64');
+}
+
 function parseDurationToSeconds(val: string | number | undefined, fallback: number): number {
   if (typeof val === 'number' && isFinite(val) && val > 0) return Math.floor(val);
   const raw = (val as string) || '';
@@ -55,6 +61,12 @@ function parseDurationToSeconds(val: string | number | undefined, fallback: numb
 function envOr(name: string, def: string): string {
   const v = process.env[name];
   return (v && v.length > 0) ? v : def;
+}
+
+function tokenError(code: string, message: string): any {
+  const err: any = new Error(message);
+  err.code = code;
+  return err;
 }
 
 export class JwtService {
@@ -113,6 +125,54 @@ export class JwtService {
   hashRefreshToken(token: string): string {
     const mac = createHmac('sha256', this.refreshSecret).update(token).digest();
     return base64url(mac);
+  }
+
+  // Verify an access token: validates structure, signature, iss/aud, and expiration
+  verifyAccessToken(token: string): any {
+    if (typeof token !== 'string' || token.split('.').length !== 3) {
+      throw tokenError('TOKEN_MALFORMED', 'Malformed token');
+    }
+
+    const [h, p, s] = token.split('.');
+    try {
+      const headerJson = base64urlDecode(h).toString('utf8');
+      const payloadJson = base64urlDecode(p).toString('utf8');
+      const header = JSON.parse(headerJson);
+      const payload = JSON.parse(payloadJson);
+
+      if (header?.alg !== 'HS256') {
+        throw tokenError('TOKEN_UNSUPPORTED_ALG', 'Unsupported algorithm');
+      }
+
+      const signingInput = `${h}.${p}`;
+      const expectedSig = createHmac('sha256', this.accessSecret).update(signingInput).digest();
+      const actualSig = base64urlDecode(s);
+      if (actualSig.length !== expectedSig.length || !timingSafeEqual(actualSig, expectedSig)) {
+        throw tokenError('TOKEN_INVALID_SIGNATURE', 'Invalid token signature');
+      }
+
+      // Validate claims
+      if (payload?.iss !== this.issuer) {
+        throw tokenError('TOKEN_INVALID_ISSUER', 'Invalid token issuer');
+      }
+      if (payload?.aud !== this.audience) {
+        throw tokenError('TOKEN_INVALID_AUDIENCE', 'Invalid token audience');
+      }
+
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (typeof payload?.exp !== 'number' || nowSec >= payload.exp) {
+        throw tokenError('TOKEN_EXPIRED', 'Token expired');
+      }
+      // Optional: nbf check
+      if (typeof payload?.nbf === 'number' && nowSec < payload.nbf) {
+        throw tokenError('TOKEN_NOT_YET_VALID', 'Token not yet valid');
+      }
+
+      return payload;
+    } catch (e: any) {
+      if (e?.code) throw e; // preserve structured token errors
+      throw tokenError('TOKEN_INVALID', 'Invalid token');
+    }
   }
 }
 
