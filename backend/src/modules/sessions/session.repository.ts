@@ -63,3 +63,61 @@ export async function createUserSession(params: CreateUserSessionParams): Promis
   ]);
   return mapRow(res.rows[0]);
 }
+
+export async function findActiveSessionByHash(refreshTokenHash: string): Promise<UserSession | null> {
+  const sql = `
+    SELECT id, user_id, refresh_token_hash, user_agent, ip_address, created_at, expires_at, revoked_at
+    FROM user_sessions
+    WHERE refresh_token_hash = $1
+      AND revoked_at IS NULL
+      AND expires_at > NOW()
+    LIMIT 1
+  `;
+  const res = await query<DbSessionRow>(sql, [refreshTokenHash]);
+  if (res.rows.length === 0) return null;
+  return mapRow(res.rows[0]);
+}
+
+export async function rotateSessionToken(
+  sessionId: string,
+  newRefreshTokenHash: string,
+  newExpiresAt: Date,
+  meta?: { userAgent?: string | null; ipAddress?: string | null },
+): Promise<UserSession> {
+  const sql = `
+    UPDATE user_sessions
+    SET refresh_token_hash = $2,
+        user_agent = COALESCE($3, user_agent),
+        ip_address = COALESCE($4, ip_address),
+        expires_at = $5,
+        revoked_at = NULL
+    WHERE id = $1
+    RETURNING id, user_id, refresh_token_hash, user_agent, ip_address, created_at, expires_at, revoked_at
+  `;
+  const res = await query<DbSessionRow>(sql, [
+    sessionId,
+    newRefreshTokenHash,
+    meta?.userAgent ?? null,
+    meta?.ipAddress ?? null,
+    newExpiresAt.toISOString(),
+  ]);
+  return mapRow(res.rows[0]);
+}
+
+export async function revokeSessionById(sessionId: string): Promise<void> {
+  const sql = `
+    UPDATE user_sessions
+    SET revoked_at = NOW()
+    WHERE id = $1 AND revoked_at IS NULL
+  `;
+  await query(sql, [sessionId]);
+}
+
+export async function revokeAllSessionsForUser(userId: string): Promise<void> {
+  const sql = `
+    UPDATE user_sessions
+    SET revoked_at = NOW()
+    WHERE user_id = $1 AND revoked_at IS NULL
+  `;
+  await query(sql, [userId]);
+}

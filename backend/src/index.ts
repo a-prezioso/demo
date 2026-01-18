@@ -11,3 +11,4 @@ export * from './security/jwt.service';
 export * from './api/auth';
 export * from './db/client';
 export * from './api/auth/jwt.middleware';
+export * from './modules/sessions/session.repository';
