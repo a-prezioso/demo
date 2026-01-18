@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { LoginForm, LoginValues } from './LoginForm';
 import { SignupForm, SignupValues } from './SignupForm';
 import { defaultI18n, I18n, I18nDict } from '../../i18n/i18n';
+import { useAuthOptional } from '../../auth/AuthContext';
 
 export interface AuthApiClient {
   login(input: { email: string; password: string }): Promise<{
@@ -24,13 +25,25 @@ export interface AuthApiClient {
 export interface AuthPageProps {
   api?: AuthApiClient; // allow DI for tests or custom clients
   onAuthSuccess?: (result: { accessToken: string; refreshToken: string; user: { id: string; email: string } }) => void;
+  // Where to redirect after successful auth (login or signup). App can ignore if using onAuthSuccess
+  redirectTo?: string;
   initialMode?: 'login' | 'signup';
   i18n?: Partial<I18nDict>;
+  // optional navigation function (router-agnostic). If provided, will be used to navigate after success
+  navigate?: (to: string) => void;
 }
 
-export const AuthPage: React.FC<AuthPageProps> = ({ api, onAuthSuccess, initialMode = 'login', i18n }) => {
+export const AuthPage: React.FC<AuthPageProps> = ({ api, onAuthSuccess, redirectTo = '/app', initialMode = 'login', i18n, navigate }) => {
   const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const dict = useMemo<I18n>(() => defaultI18n(i18n), [i18n]);
+  const auth = useAuthOptional();
+
+  const afterAuth = (res: { accessToken: string; refreshToken: string; user: { id: string; email: string } }) => {
+    // If AuthContext is present, persist in context as well to keep app state in sync
+    if (auth) auth.setAuth({ accessToken: res.accessToken, refreshToken: res.refreshToken, user: res.user });
+    onAuthSuccess?.(res);
+    if (navigate) navigate(redirectTo);
+  };
 
   return (
     <div style={styles.container}>
@@ -60,7 +73,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ api, onAuthSuccess, initialM
             onSubmit={async (values: LoginValues) => {
               const client = api ?? defaultApiClient;
               const res = await client.login(values);
-              onAuthSuccess?.({ accessToken: res.accessToken, refreshToken: res.refreshToken, user: res.user });
+              afterAuth({ accessToken: res.accessToken, refreshToken: res.refreshToken, user: res.user });
             }}
           />
         ) : (
@@ -71,7 +84,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ api, onAuthSuccess, initialM
               // perform signup then auto-login for convenience
               await client.signup({ email: values.email, password: values.password });
               const res = await client.login({ email: values.email, password: values.password });
-              onAuthSuccess?.({ accessToken: res.accessToken, refreshToken: res.refreshToken, user: res.user });
+              afterAuth({ accessToken: res.accessToken, refreshToken: res.refreshToken, user: res.user });
               setMode('login');
             }}
           />
