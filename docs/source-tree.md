@@ -190,7 +190,7 @@ backend/src/modules/
 │   │   └── UpsertProjectRequestDto.ts
 │   ├── repository/
 │   │   └── ProjectRepository.ts
-│   └── mappers/
+│   	  └── mappers/
 │       └── ProjectMapper.ts
 ├── document/                    # Documenti sorgente del progetto
 │   ├── api/
@@ -281,6 +281,16 @@ frontend/
 │   │   │   │   └── authApi.ts   # call /api/auth/login, /api/auth/refresh
 │   │   │   └── state/
 │   │   │       └── authSlice.ts # stato utente loggato (se Redux)
+│   │   ├── dashboard/           # NEW: Mappa 12 postazioni
+│   │   │   ├── pages/DashboardPage.tsx
+│   │   │   ├── components/SeatMap.tsx
+│   │   │   ├── components/SeatMarker.tsx
+│   │   │   ├── components/Legend.tsx
+│   │   │   ├── components/InfoBottomSheet.tsx
+│   │   │   ├── components/ZoomControls.tsx
+│   │   │   ├── components/RefreshButton.tsx
+│   │   │   ├── api/dashboardApi.ts
+│   │   │   └── state/dashboardSlice.ts
 │   │   ├── projects/
 │   │   │   ├── pages/
 │   │   │   │   ├── ProjectListPage.tsx
@@ -396,6 +406,7 @@ backend/test/
 │   │   ├── project/
 │   │   │   └── projectService.spec.ts
 │   │   ├── document/
+│   │   │   
 │   │   │   └── documentService.spec.ts
 │   │   └── generation/
 │   │       └── docGenerationService.spec.ts
@@ -446,6 +457,7 @@ flowchart TB
         PROJ[project]
         DOC[document]
         GEN[generation]
+        DASH[dashboard]  %% NEW (frontend feature)
     end
 
     subgraph Worker
@@ -475,12 +487,8 @@ flowchart TB
 
 **Regole:**
 
-- I moduli **possono dipendere dal Core**, mai il contrario.  
-- Le dipendenze tra moduli devono riflettere relazioni di dominio, evitare cicli:
-  - `document` può dipendere da `project`
-  - `generation` può dipendere da `project` e `document`
-  - `auth` può dipendere da `user`
-- Il **Controller** di un modulo chiama solo i **Service** del modulo (o di moduli consentiti); non accede direttamente ai repository di altri moduli.
+- I moduli possono dipendere dal Core, mai il contrario.  
+- Nuova feature frontend “dashboard” non introduce dipendenze backend: consuma `/api/desks` quando disponibile.
 
 ### 9.2. Layering interno al backend
 
@@ -525,4 +533,5 @@ flowchart TB
 Se nel repository attuale non esistono ancora queste cartelle, il passo successivo consigliato è:
 
 1. Creare le cartelle **backend/** e **frontend/** secondo la struttura indicata.  
-2. Aggiungere progressivamente i moduli (`auth`, `user`, `project`, `document`, `generation`) rispettando le regole di dipendenza e layering.
+2. Aggiungere progressivamente i moduli (`auth`, `user`, `project`, `document`, `generation`) rispettando le regole di dipendenza e layering.  
+3. Aggiungere la feature frontend “dashboard” come descritto in §6.

@@ -1,0 +1,33 @@
++------------------------------------------------+
+| [≡] Dashboard                         ⟳ Refresh |
+|-----------------------------------------------|
+|                                               |
+|             [   Mappa (SVG)   ]               |
+|  • 12 marker cliccabili (tap area ≥44x44px)   |
+|  • Pinch/zoom opzionale + pulsanti (+)(−)     |
+|                                               |
+|                        (+)  (−)               |
+|-----------------------------------------------|
+|  ◻︎ Legenda:  ● Libero   ■ Occupato   ▲ N/D   |
+|  (tappable → espande/chiude dettagli)         |
++------------------------------------------------+
+| ⌄ Postazione A1                               |
+|  Stato: Libero                                |
+|  Info: Vicino finestra                        |
+|  Azioni: [Prenota]  [Dettagli →]              |
++------------------------------------------------+
+
+Tablet/Desktop (landscape):
+
++---------------------------------------------------------------------------------+
+| [≡] Dashboard                                  | Ricerca [🔎] | ⟳ Refresh | 👤 |
+|---------------------------------------------------------------------------------|
+|                 |                                                                  |
+|  Legenda        |                         Mappa (SVG)                             |
+|  ● Libero       |                   [12 marker cliccabili]                         |
+|  ■ Occupato     |                                                                  |
+|  ▲ N/D          |                                                                  |
+|                 |                                                                  |
+|-----------------|------------------------------------------------------------------|
+|     Pannello laterale info (dockable) / Bottom sheet su schermi medi              |
++---------------------------------------------------------------------------------+
