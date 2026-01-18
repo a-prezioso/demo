@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import ProtectedRoute from '../../router/ProtectedRoute';
 import { useDesksData } from './useDesksData';
 import { BookingConfirmationDialog } from '../Booking/BookingConfirmationDialog';
+import { createDeskBooking } from '../../api/bookingClient';
+import { useAuth } from '../../hooks/useAuth';
 
 export type DeskStatus = 'free' | 'busy' | 'unavailable';
 
@@ -60,6 +62,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [selected, setSelected] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState<boolean>(false);
   const [confirmLoading, setConfirmLoading] = useState<boolean>(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  const { state } = useAuth(baseUrl);
+  const accessToken = state?.accessToken;
+  const currentUserId = state?.user?.id;
 
   // Integrate with backend via hook; if desks prop provided, keep using it (e.g., tests)
   const { desks: liveDesks, loading, error, lastUpdated, refresh } = useDesksData({
@@ -125,14 +132,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     setShowConfirm(true);
   }
 
+  function toIsoDateOnly(d: Date): string {
+    const x = new Date(d);
+    const yyyy = x.getFullYear();
+    const mm = String(x.getMonth() + 1).padStart(2, '0');
+    const dd = String(x.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   async function handleConfirm(preview: BookingPreview) {
+    setConfirmError(null);
     try {
       setConfirmLoading(true);
+      // Prima tenta integrazione reale; bookingClient fallback a stub se endpoint non esiste
+      await createDeskBooking(
+        { deskId: preview.deskId, date: toIsoDateOnly(preview.bookingDate), userId: currentUserId },
+        { baseUrl, accessToken },
+      );
       // Propaga l'evento verso l'esterno; l'handler può essere async
       await onConfirmBooking?.(preview);
       // Chiusura popup
       setShowConfirm(false);
       setSelected(null);
+      // Aggiorna stato mappa dopo prenotazione
+      await handleRefresh();
+    } catch (e: any) {
+      setConfirmError(e?.message || 'Prenotazione non riuscita');
+      // Non chiudere automaticamente
     } finally {
       setConfirmLoading(false);
     }
@@ -207,6 +233,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         onConfirm={handleConfirm}
         onCancel={handleCancel}
         loading={confirmLoading}
+        titleText={confirmError ? `Errore: ${confirmError}` : undefined}
       />
     </div>
   );
