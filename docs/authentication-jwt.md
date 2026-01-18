@@ -1,6 +1,6 @@
 # Autenticazione JWT e Flusso di Refresh
 
-Versione: 1.0
+Versione: 1.1
 Data: 18/01/2026
 Autore: Security/Backend Team
 Stato: Draft
@@ -15,6 +15,7 @@ Questo documento descrive l’architettura di autenticazione basata su JWT (JSON
 - specifica dell’endpoint /api/auth/refresh
 - esempi di richieste/risposte
 - note di sicurezza e raccomandazioni per il front‑end
+- collegamento al documento di implementazione frontend dei token (docs/frontend-authentication.md)
 
 Il contenuto è allineato alla struttura applicativa descritta in docs/architecture.md e docs/source-tree.md (modulo core/security + modulo auth).
 
@@ -287,10 +288,11 @@ Response 401 (token invalido):
   - POST /api/auth/login: verifica credenziali, emette access+refresh
   - POST /api/auth/refresh: esegue validazione/rotation e restituisce nuovo access (e refresh opzionale)
 
-Nota: i nomi file/percorsi riflettono lo standard in docs/source-tree.md. Se non ancora presenti, vanno creati secondo tale struttura.
+Frontend: vedere docs/frontend-authentication.md per implementazione AuthContext, ProtectedRoute, tokenStorage e flussi UI.
 
 ---
 
 8. Change Log
 
+- 1.1 (18/01/2026): Collegate le linee guida frontend e aggiunto riferimento a docs/frontend-authentication.md.
 - 1.0 (18/01/2026): Prima versione del documento, allineata alla story "Proteggere API riservate con middleware JWT e endpoint refresh".
