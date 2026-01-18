@@ -50,6 +50,8 @@ function requireAuth(options = {}) {
       if (!result || !result.valid) {
         const err = (result && result.error) || "invalid_token";
         if (err === "token_expired") return send(res, 401, "Token expired");
+        if (err === "token_not_yet_valid") return send(res, 401, "Token not yet valid");
+        if (err === "invalid_issuer" || err === "invalid_audience") return send(res, 401, "Invalid token");
         return send(res, 401, "Invalid token");
       }
 

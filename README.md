@@ -25,37 +25,32 @@ Conventions
 Security services
 - passwordService: hashPassword(plain), verifyPassword(plain, hash)
 - validationService: validateEmail(email) -> {valid, email, error}; validatePassword(pwd) -> {valid, error}
-- jwtService: sign(payload[, {expiresInSeconds}]) -> { token, expiresIn }; verify(token) -> { valid, payload }
-- Config via env:
-  SECURITY_SCRYPT_N (default 16384)
-  SECURITY_SCRYPT_R (8)
-  SECURITY_SCRYPT_P (1)
-  SECURITY_SCRYPT_KEYLEN (64)
-  SECURITY_SALT_LEN (16)
-  SECURITY_PASSWORD_MIN_LENGTH (10)
-  SECURITY_PASSWORD_REQUIRE_UPPERCASE (true)
-  SECURITY_PASSWORD_REQUIRE_LOWERCASE (true)
-  SECURITY_PASSWORD_REQUIRE_NUMBER (true)
-  SECURITY_PASSWORD_REQUIRE_SYMBOL (true)
-  JWT_SECRET (dev default in code; set in prod)
-  JWT_ISSUER (smartdesk)
-  JWT_AUDIENCE (smartdesk-clients)
-  JWT_ACCESS_EXPIRES_IN (900)
-  JWT_REFRESH_EXPIRES_IN (2592000)
+- jwtService: sign(payload[, {expiresInSeconds}]) -> { token, expiresIn }; verify(token) -> { valid, payload | error }
+  Config via env:
+  JWT_SECRET (HS256) or JWT_PUBLIC_KEY (for RS256 verify)
+  JWT_ISSUER (default smartdesk)
+  JWT_AUDIENCE (default smartdesk-clients)
+  JWT_ACCESS_EXPIRES_IN (seconds, default 900)
+  JWT_REFRESH_EXPIRES_IN (seconds, default 2592000)
+  JWT_CLOCK_SKEW_SEC (seconds, default 0)
 
-HTTP API
-- POST /api/auth/signup { email, password } -> 201 { id, email, status, created_at, updated_at }
-- POST /api/auth/login { email, password } -> 200 { accessToken, refreshToken, tokenType, expiresIn, user }
-- POST /api/auth/refresh { refreshToken, [rotate=true] } -> 200 { accessToken, refreshToken?, tokenType, expiresIn }
-  - Validates refresh token by sha256(token) match in DB, not revoked/expired, user status ok
-  - If rotate=true (default), old session is revoked and a new refresh token is issued (rotation)
-  - If rotate=false, reuses the same refresh token and only updates last_used_at
-- POST /api/auth/logout { refreshToken } -> 204 (revoke provided refresh token)
-- POST /api/auth/logout { allSessions: true } with Authorization: Bearer <access> -> 204 (revoke all sessions for user)
-- GET /api/secure/profile with Authorization: Bearer <access> -> 200 { user }
-- GET /api/secure/admin/metrics with Authorization: Bearer <access> (ADMIN) -> 200
+API
+- POST /api/auth/signup: create user
+- POST /api/auth/login: login with email/password, returns accessToken and refreshToken
+- POST /api/auth/refresh: issue a new access token (optionally rotate refresh token)
+- POST /api/auth/logout: revoke current session/refresh token
+- GET /api/secure/profile: example protected route, requires Bearer access token
+- GET /api/secure/admin/metrics: example admin-only route
+- GET /api/private/me: protected route guarded at router level (middleware applied to all /api/private/**)
+- GET /api/private/admin/overview: admin-only route under /api/private/**
+
+Running locally
+- Node >=16
+- npm install
+- npm start (requires DATABASE_URL or PG* env if you hit DB-backed endpoints)
+
+Testing
+- jest (unit + integration). Some tests use pg-mem to simulate Postgres.
 
 Notes
-- Error responses do not leak whether a refresh token exists; use generic 401 Invalid refresh token for invalid/expired/revoked tokens.
-- On login, refresh token is random URL-safe string (base64url of 48 random bytes); only its sha256 hash is stored.
-- Use HTTPS and httpOnly secure cookies for refresh token storage on the client where possible.
+- In production always set a strong JWT_SECRET or use RS256 with JWT_PUBLIC_KEY for verification and keep the private key secure on the issuer.
