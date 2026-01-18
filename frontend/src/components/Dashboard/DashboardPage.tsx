@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useDesksData } from './useDesksData';
+import { useSelectedDate } from '../../context/SelectedDateContext';
 
 export type DeskStatus = 'free' | 'busy' | 'unavailable';
 
@@ -25,8 +26,7 @@ const statusToColorClass: Record<DeskStatus, string> = {
 };
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ baseUrl }) => {
-  // Simple date selector (placeholder). In a real app, it would come from a DatePicker.
-  const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const { date, setDate } = useSelectedDate();
 
   const { desks, loading, error, lastUpdated, refresh } = useDesksData({ baseUrl, date });
 
