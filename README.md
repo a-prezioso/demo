@@ -6,6 +6,7 @@ Paths
 - db/migrations: SQL migrations (PostgreSQL)
 - docs/user_model.md: User model documentation
 - docs/auth_jwt.md: Authentication and JWT design
+- docs/auth_refresh_endpoint.md: Detailed refresh endpoint and middleware summary
 - docs/auth_flow_diagram.txt: High-level text diagram of auth flow
 - src/security: Security services (password hashing/verification and input validation)
 - src/api: Minimal HTTP API server exposing /api/auth/signup and /api/auth/login
@@ -49,6 +50,10 @@ Refresh token persistence
 - Implemented in src/api/repositories/refreshTokenRepository.js
 - Functions: createSession, findSessionWithUserByHash, touchLastUsed, revokeById, revokeByTokenHash, revokeAllForUser, cleanupExpired
 - Only token hashes are stored; raw tokens are never persisted or logged
+
+JWT and refresh flow documentation
+- See docs/auth_jwt.md for a complete overview: token formats, claims, lifetimes, middleware behavior, endpoint specs, and examples.
+- See docs/auth_refresh_endpoint.md for a focused spec of POST /api/auth/refresh and middleware quick reference.
 
 Maintenance
 - Schedule periodic cleanup of expired/old revoked refresh tokens using cleanupExpired({ retentionDays }).

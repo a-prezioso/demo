@@ -61,3 +61,135 @@ Security notes
 
 Operations
 - Cleanup job: schedule periodic invocation of repository.cleanupExpired (e.g., daily) via a background worker or external scheduler (cron).
+
+
+Details: Tokens, middleware, refresh endpoint, examples, and security
+
+Access token (JWT)
+- Algorithm: HS256 (HMAC-SHA256). RS256 verification is supported if JWT_PUBLIC_KEY is provided for verification scenarios.
+- Default lifetime: 15 minutes. Configurable via env JWT_ACCESS_EXPIRES_IN (seconds).
+- Format: header.payload.signature (base64url)
+- Claims set by the API (via jwtService.sign):
+  - sub: user id (UUID)
+  - email: user email (normalized)
+  - roles: array of strings (e.g., ["USER"], ["ADMIN"]) from users.roles
+  - iss: issuer, default smartdesk (JWT_ISSUER)
+  - aud: audience, default smartdesk-clients (JWT_AUDIENCE)
+  - iat: issued-at (epoch seconds)
+  - exp: expiration (epoch seconds)
+
+Refresh token (opaque)
+- Format: base64url-encoded random bytes (default 32 bytes -> ~43 chars)
+- Default lifetime: 30 days. Configurable via env JWT_REFRESH_EXPIRES_IN (seconds).
+- Storage: only SHA-256 hash is persisted in auth_refresh_tokens.token_hash, never the raw token. Metadata includes user_id, issued/last_used/expires, revoked_at/reason, user_agent, ip_address.
+- Rotation: by default the refresh endpoint rotates the token (revokes old session and issues a new refresh token). Rotation can be disabled for testing by sending { rotate: false }.
+
+JWT middleware and route protection
+- Middleware: src/api/middleware/auth.js (requireAuth, requireRoles)
+- Extraction: Authorization header with Bearer scheme. Example: Authorization: Bearer <accessToken>
+- Verification: signature and claims via jwtService.verify; checks iss/aud if present, iat/nbf/exp with optional clock skew (JWT_CLOCK_SKEW_SEC).
+- On success: attaches req.user = { id: sub, email, roles, ...claims } and req.auth = { token, payload }.
+- Failure behavior:
+  - 401 Unauthorized when:
+    - Missing/invalid Authorization header
+    - Invalid signature/algorithm or malformed token
+    - Token expired (error: token_expired)
+    - Token not yet valid (nbf) or invalid iat
+    - Optional revocation hook marks token as revoked
+  - 403 Forbidden when:
+    - User is authenticated but lacks required roles
+
+Protected routes in this project
+- GET /api/secure/profile: any authenticated user (requireAuth())
+- GET /api/secure/admin/metrics: ADMIN only (requireAuth({ roles: ["ADMIN"] }) + requireRoles(["ADMIN"]))
+- All /api/private/* endpoints: requireAuth() applied at router level
+- GET /api/private/admin/overview: ADMIN only (requireRoles(["ADMIN"]))
+
+Refresh endpoint specification
+- HTTP: POST
+- URL: /api/auth/refresh
+- Request body (JSON):
+  - refreshToken: string (required) – the opaque token previously issued at login or refresh
+  - rotate: boolean (optional, default true) – when true, the used refresh token is revoked and a new one is issued
+- Response (200 OK):
+  - Always returns a new access token
+  - If rotate is true (default): also returns a new refresh token
+  - Shape when rotate=true:
+    { accessToken: string, refreshToken: string, tokenType: "Bearer", expiresIn: number }
+  - Shape when rotate=false:
+    { accessToken: string, tokenType: "Bearer", expiresIn: number }
+- Error responses:
+  - 400 Bad Request: missing refreshToken in the body or invalid payload schema
+  - 401 Unauthorized: refresh token not found, expired, or revoked; token hash mismatch; user not ACTIVE
+  - 500 Internal Server Error: unexpected failures
+
+Endpoint behavior (server-side summary)
+- The server hashes the provided refreshToken (SHA-256) and looks up the session in auth_refresh_tokens joined with the user record.
+- Validations: existence, not expired, not revoked, user status ACTIVE.
+- On success:
+  - Issues a new access token with claims { sub, email, roles, iss, aud, iat, exp }.
+  - Updates last_used_at for the session.
+  - If rotate=true: revokes the current session (revoked_at, revoked_reason = "rotated") and creates a new session with a brand new refresh token.
+
+Examples
+
+1) Accessing a protected API
+- Request:
+  GET /api/secure/profile
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+- Success response (200):
+  { "user": { "id": "<uuid>", "email": "user@example.com", "roles": ["USER"] } }
+- Failure (missing/invalid token):
+  401 { "error": "Invalid token" }
+- Failure (expired token):
+  401 { "error": "Token expired" }
+- Failure (insufficient roles):
+  403 { "error": "Forbidden" }
+
+2) Refreshing tokens (rotate = default)
+- Request:
+  POST /api/auth/refresh
+  Content-Type: application/json
+  { "refreshToken": "<opaque-base64url>" }
+- Success response (200):
+  { "accessToken": "<jwt>", "refreshToken": "<new-opaque>", "tokenType": "Bearer", "expiresIn": 900 }
+
+3) Refresh without rotation (testing only)
+- Request:
+  POST /api/auth/refresh
+  Content-Type: application/json
+  { "refreshToken": "<opaque-base64url>", "rotate": false }
+- Success response (200):
+  { "accessToken": "<jwt>", "tokenType": "Bearer", "expiresIn": 900 }
+
+4) Example login response (context)
+- Response body after POST /api/auth/login:
+  { "accessToken": "<jwt>", "refreshToken": "<opaque>", "tokenType": "Bearer", "expiresIn": 900 }
+
+Cookies vs body for refresh token
+- The API expects the refreshToken in the JSON body for /api/auth/refresh.
+- For browser apps, prefer storing the refresh token in an httpOnly, secure, sameSite cookie set by the front-end domain; the client may then read the cookie value server-side or forward it in the request body via an intermediate handler. Alternatively, extend the API to read refreshToken from a secure cookie.
+
+Configuration
+- JWT_SECRET: HMAC secret for HS256 (required in production)
+- JWT_PUBLIC_KEY: PEM public key for RS256 verification (optional)
+- JWT_ISSUER: issuer (default smartdesk)
+- JWT_AUDIENCE: audience (default smartdesk-clients)
+- JWT_ACCESS_EXPIRES_IN: access token lifetime in seconds (default 900)
+- JWT_REFRESH_EXPIRES_IN: refresh token lifetime in seconds (default 2592000)
+- JWT_CLOCK_SKEW_SEC: allowed leeway (seconds) when validating iat/nbf/exp (default 0)
+
+Front-end recommendations and security notes
+- Use HTTPS everywhere; never send tokens over plain HTTP.
+- Store access tokens in memory only (do not persist in localStorage/sessionStorage) to reduce XSS impact.
+- Store refresh tokens in httpOnly, secure cookies with appropriate sameSite; avoid exposing them to JS when possible.
+- Always prefer refresh rotation (default). If a refresh token is used, the previous one becomes invalid when rotated.
+- Implement logout by calling POST /api/auth/logout and removing client-side tokens; server will revoke the refresh session.
+- Consider rate-limiting login and refresh endpoints and monitoring unusual patterns (e.g., multiple failed refresh attempts) using IP and User-Agent metadata recorded with sessions.
+- Token theft implications:
+  - Stolen access token: usable only until exp (short-lived by design). Rotate keys if a widespread compromise is suspected.
+  - Stolen refresh token: can be exchanged for new access tokens until it is revoked or expires. Use rotation and anomaly detection; allow users to revoke all sessions.
+
+Maintenance and cleanup
+- Schedule periodic cleanup using repository.cleanupExpired({ retentionDays }) to remove expired sessions and old revoked tokens.
+- Consider a job that also revokes sessions flagged by security analytics.
