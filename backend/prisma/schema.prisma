@@ -49,6 +49,7 @@ model RefreshToken {
   expiresAt            DateTime  @map("expires_at")
   revokedAt            DateTime? @map("revoked_at")
   revokedReason        String?   @map("revoked_reason") @db.VarChar(255)
+  revokedBy            String?   @map("revoked_by") @db.VarChar(255)
   userAgent            String?   @map("user_agent") @db.VarChar(255)
   ipAddress            String?   @map("ip_address") @db.VarChar(64)
   familyId             String    @map("family_id") @db.Uuid

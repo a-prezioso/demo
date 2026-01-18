@@ -31,6 +31,15 @@ export class InMemoryRefreshTokenRepository implements IRefreshTokenRepository {
     return this.items.find((i) => i.tokenHash === tokenHash) || null;
   }
 
+  async findRefreshTokenById(id: string): Promise<RefreshTokenRecord | null> {
+    return this.items.find((i) => i.id === id) || null;
+  }
+
+  async findActiveTokensByUserId(userId: string, at?: Date): Promise<RefreshTokenRecord[]> {
+    const ts = (at ?? new Date()).getTime();
+    return this.items.filter((i) => i.userId === userId && !i.revokedAt && new Date(i.expiresAt).getTime() > ts);
+  }
+
   async revokeRefreshToken(id: string, reason?: string, replacementTokenId?: string | null): Promise<void> {
     const rec = this.items.find((i) => i.id === id);
     if (rec) {
@@ -50,6 +59,15 @@ export class InMemoryRefreshTokenRepository implements IRefreshTokenRepository {
         i.updatedAt = now;
       }
     }
+  }
+
+  async cleanupExpired(before?: Date): Promise<number> {
+    const cutoff = (before ?? new Date()).getTime();
+    const original = this.items.length;
+    // Keep items that are not expired OR that are revoked but not expired? For cleanup, delete if expired AND revoked or just expired
+    // Strategy: remove any token whose expiresAt <= cutoff
+    this.items = this.items.filter((i) => new Date(i.expiresAt).getTime() > cutoff);
+    return original - this.items.length;
   }
 }
 
