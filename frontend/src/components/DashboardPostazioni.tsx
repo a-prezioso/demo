@@ -7,7 +7,7 @@ const statusColor: Record<DeskStatus, string> = {
   UNAVAILABLE: '#9ca3af',
 };
 
-export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000, onSelect }: { baseUrl?: string; refreshMs?: number; onSelect?: (desk: Desk) => void }) {
+export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000, onSelect, overrideStatuses }: { baseUrl?: string; refreshMs?: number; onSelect?: (desk: Desk) => void; overrideStatuses?: Record<string, DeskStatus> }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<Desk[]>([]);
@@ -37,9 +37,14 @@ export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000, onSelect 
   if (loading) return <div aria-label="loading">Caricamento…</div>;
   if (error) return <div role="alert">{error}</div>;
 
+  const effectiveItems = items.map((d) => {
+    const status = overrideStatuses && overrideStatuses[d.id] ? overrideStatuses[d.id] : d.status;
+    return { ...d, status } as Desk;
+  });
+
   return (
     <div className="grid grid-cols-3 gap-2" aria-label="dashboard">
-      {items.map((d) => (
+      {effectiveItems.map((d) => (
         <button
           key={d.id}
           data-testid={`desk-${d.id}`}
@@ -53,7 +58,7 @@ export function DashboardPostazioni({ baseUrl = '', refreshMs = 15000, onSelect 
           {d.name}
         </button>
       ))}
-      {items.length < 12 && Array.from({ length: 12 - items.length }).map((_, i) => (
+      {effectiveItems.length < 12 && Array.from({ length: 12 - effectiveItems.length }).map((_, i) => (
         <div key={`empty-${i}`} className="h-12 rounded bg-gray-200" />
       ))}
     </div>

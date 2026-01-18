@@ -6,6 +6,7 @@ export interface BookingPreview {
   deskName: string; // numero/nome postazione
   floor?: string | number;
   building?: string;
+  timeSlot?: string | null; // opzionale fascia oraria
 }
 
 export interface BookingConfirmationDialogProps {
@@ -28,7 +29,7 @@ export function BookingConfirmationDialog({
 }: BookingConfirmationDialogProps) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
-  const dialogId = useMemo(() => `dialog-${Math.random().toString(36).slice(2)}`, []);
+  const dialogId = useMemo(() => `dialog-${Math.random().toString(36).slice(2)}` , []);
   const titleId = `${dialogId}-title`;
   const descId = `${dialogId}-desc`;
 
@@ -104,6 +105,13 @@ export function BookingConfirmationDialog({
               <>
                 <dt className="col-span-1 text-gray-500">Edificio</dt>
                 <dd className="col-span-2 text-gray-900" data-testid="booking-building">{bookingPreview.building}</dd>
+              </>
+            )}
+
+            {bookingPreview.timeSlot && (
+              <>
+                <dt className="col-span-1 text-gray-500">Fascia oraria</dt>
+                <dd className="col-span-2 text-gray-900" data-testid="booking-timeslot">{bookingPreview.timeSlot}</dd>
               </>
             )}
           </dl>
