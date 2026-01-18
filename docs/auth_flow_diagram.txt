@@ -1,0 +1,41 @@
+High-level authentication flow (text diagram)
+
+Signup (existing)
+User -> /api/auth/signup (email, password)
+API -> validate + hash -> DB(users)
+API -> 201 Created (user id)
+
+Login
+User -> /api/auth/login (email, password)
+API -> validate inputs
+API -> lookup user by email
+[if not found or bad password] -> 401 Invalid credentials
+[if status != ACTIVE]
+  PENDING -> 403 Please verify your email
+  DISABLED/SUSPENDED -> 403 Access forbidden
+API -> issue access JWT (15m)
+API -> generate refresh token (opaque, 30d)
+API -> store refresh token hash in DB(auth_refresh_tokens)
+API -> 200 { accessToken, refreshToken, tokenType: Bearer, expiresIn }
+
+Access protected resource
+User -> GET /api/secure (Authorization: Bearer <access>)
+API -> verify JWT (iss, aud, exp, signature)
+API -> 200 OK or 401/403
+
+Refresh token
+User -> POST /api/auth/refresh (refreshToken)
+API -> hash token and lookup in DB(auth_refresh_tokens)
+[if not found/expired/revoked] -> 401
+API -> issue new access token (and optionally rotate refresh)
+API -> 200 { accessToken, [refreshToken], tokenType, expiresIn }
+
+Logout
+User -> POST /api/auth/logout (refreshToken)
+API -> revoke session (set revoked_at)
+API -> 204 No Content
+
+Rate limiting / brute force protection
+- Track failed attempts per email and IP
+- After N failures in T seconds, block for a cooldown window (respond 429)
+- Optionally set Retry-After header

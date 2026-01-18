@@ -1,22 +1,25 @@
-SmartDesk Coworking - Data Model and Migrations
+SmartDesk Coworking - Data Model, Migrations and Auth Design
 
-This repository branch contains database artifacts to support user signup.
+This repository branch contains database artifacts to support user signup and the design for JWT-based authentication.
 
 Paths
 - db/migrations: SQL migrations (PostgreSQL)
 - docs/user_model.md: User model documentation
+- docs/auth_jwt.md: Authentication and JWT design
+- docs/auth_flow_diagram.txt: High-level text diagram of auth flow
 - src/security: Security services (password hashing/verification and input validation)
 - src/api: Minimal HTTP API server exposing /api/auth/signup
 - src/db: Database client (pg)
 
-Applying the migration (PostgreSQL)
+Applying the migrations (PostgreSQL)
 - Requires extensions: citext, pgcrypto
 - Run in psql:
   \i db/migrations/0001_create_users.sql
+  \i db/migrations/0002_auth_refresh_tokens.sql
 
 Conventions
 - Columns are snake_case
-- Do NOT log sensitive fields: password_hash, salt, verification_token
+- Do NOT log sensitive fields: password_hash, salt, verification_token, refresh tokens, token_hash
 - Email is unique and case-insensitive via CITEXT
 
 Security services
@@ -34,6 +37,16 @@ Security services
   SECURITY_PASSWORD_REQUIRE_NUMBER (true)
   SECURITY_PASSWORD_REQUIRE_SYMBOL (true)
   SECURITY_PASSWORD_FORBID_COMMON (true)
+
+JWT/Auth configuration (planned)
+- JWT_ACCESS_SECRET (required)
+- JWT_ACCESS_EXPIRES_IN (default 900)
+- JWT_REFRESH_EXPIRES_IN (default 2592000)
+- JWT_ISSUER (default smartdesk)
+- JWT_AUDIENCE (default smartdesk-pwa)
+- AUTH_REFRESH_ROTATE (default true)
+- AUTH_MAX_LOGIN_ATTEMPTS (default 5)
+- AUTH_LOGIN_WINDOW_SEC (default 900)
 
 Running the API locally
 - Ensure PostgreSQL is running and migration applied
