@@ -25,13 +25,14 @@ Security services added:
 HTTP API added:
 - Express server in src/server.ts
 - Auth routes in src/modules/user/interfaces/http/authRoutes.ts (signup)
-- Login route in src/modules/auth/interfaces/http/loginRoute.ts (login)
-- JWT service in src/core/jwt/jwtService.ts to sign access tokens and generate refresh tokens
-- NEW: JWT auth middleware in src/core/jwt/authMiddleware.ts with role-based guard and optional revocation check
-- Example protected routes in server.ts: GET /api/protected/profile (any authenticated user) and GET /api/admin/overview (requires admin role)
+- Login route in src/modules/auth/interfaces/http/loginRoute.ts
+- Refresh + logout routes in src/modules/auth/interfaces/http/refreshRoutes.ts
+- JWT middleware/guards in src/core/jwt/authMiddleware.ts
 
-How to protect new routes:
-- Import requireAuth from src/core/jwt/authMiddleware and attach to router/route: router.get('/path', requireAuth(), handler)
-- For role checks: router.post('/admin', requireRoles(['admin']), handler)
-- Optionally inject a revocation checker: requireAuth({ isTokenRevoked: async (claims, token) => false })
-
+Refresh token persistence (in-memory + DB schema):
+- In-memory sessions repository with hashed refresh tokens and metadata (ip, userAgent, fingerprint)
+- Operations: create, findByTokenHash, findAllByUserId, revokeByTokenHash, revokeAllForUser, cleanupExpired
+- Migration added to extend sessions table with revoked_by and revoked_reason, plus index on (user_id, revoked_at)
+- Only token hashes are stored, not raw refresh tokens
+- Logout endpoints revoke single token or all tokens for a user
+- A maintenance endpoint /api/auth/tasks/cleanup-expired triggers cleanup in-memory (placeholder for a cron job)

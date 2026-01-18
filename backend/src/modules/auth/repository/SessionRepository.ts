@@ -8,6 +8,8 @@ export interface SessionRecord {
   issuedAt: Date;
   expiresAt: Date;
   revokedAt?: Date | null;
+  revokedBy?: string | null;
+  revokedReason?: string | null;
   ip?: string | null;
   userAgent?: string | null;
   fingerprint?: string | null;
@@ -28,8 +30,10 @@ export interface CreateSessionInput {
 export interface ISessionRepository {
   create(input: CreateSessionInput): Promise<SessionRecord>;
   findByTokenHash(hash: string): Promise<SessionRecord | null>;
-  revokeByTokenHash(hash: string): Promise<boolean>;
-  revokeAllForUser(userId: string): Promise<number>; // returns count
+  findAllByUserId(userId: string): Promise<SessionRecord[]>;
+  revokeByTokenHash(hash: string, meta?: { by?: string; reason?: string }): Promise<boolean>;
+  revokeAllForUser(userId: string, meta?: { by?: string; reason?: string }): Promise<number>; // returns count
+  cleanupExpired(now?: Date): Promise<number>; // delete or mark expired sessions, returns count affected
 }
 
 // Simple in-memory implementation for development/testing
@@ -46,6 +50,8 @@ export class InMemorySessionRepository implements ISessionRepository {
       issuedAt: input.issuedAt || now,
       expiresAt: input.expiresAt,
       revokedAt: null,
+      revokedBy: null,
+      revokedReason: null,
       ip: input.ip ?? null,
       userAgent: input.userAgent ?? null,
       fingerprint: input.fingerprint ?? null,
@@ -63,16 +69,29 @@ export class InMemorySessionRepository implements ISessionRepository {
     return this.byHash.get(hash) || null;
   }
 
-  async revokeByTokenHash(hash: string): Promise<boolean> {
+  async findAllByUserId(userId: string): Promise<SessionRecord[]> {
+    const set = this.byUser.get(userId);
+    if (!set) return [];
+    const list: SessionRecord[] = [];
+    for (const hash of set) {
+      const rec = this.byHash.get(hash);
+      if (rec) list.push(rec);
+    }
+    return list;
+  }
+
+  async revokeByTokenHash(hash: string, meta?: { by?: string; reason?: string }): Promise<boolean> {
     const rec = this.byHash.get(hash);
     if (!rec) return false;
     if (rec.revokedAt) return true;
     rec.revokedAt = new Date();
+    rec.revokedBy = meta?.by ?? null;
+    rec.revokedReason = meta?.reason ?? null;
     rec.updatedAt = new Date();
     return true;
   }
 
-  async revokeAllForUser(userId: string): Promise<number> {
+  async revokeAllForUser(userId: string, meta?: { by?: string; reason?: string }): Promise<number> {
     const set = this.byUser.get(userId);
     if (!set) return 0;
     let count = 0;
@@ -80,7 +99,26 @@ export class InMemorySessionRepository implements ISessionRepository {
       const rec = this.byHash.get(hash);
       if (rec && !rec.revokedAt) {
         rec.revokedAt = new Date();
+        rec.revokedBy = meta?.by ?? null;
+        rec.revokedReason = meta?.reason ?? null;
         rec.updatedAt = new Date();
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async cleanupExpired(now: Date = new Date()): Promise<number> {
+    let count = 0;
+    for (const [hash, rec] of this.byHash.entries()) {
+      if (now >= rec.expiresAt) {
+        // Remove from maps
+        this.byHash.delete(hash);
+        const set = this.byUser.get(rec.userId);
+        if (set) {
+          set.delete(hash);
+          if (set.size === 0) this.byUser.delete(rec.userId);
+        }
         count++;
       }
     }

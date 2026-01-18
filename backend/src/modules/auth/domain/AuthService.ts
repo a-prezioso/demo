@@ -74,10 +74,10 @@ export class AuthService {
     const access = this.jwt.signAccess({ sub: user.id, email: user.email, roles: [] });
     const refresh = this.jwt.generateRefreshToken();
 
-    // Persist session (in this skeleton we skip actual DB; repository for sessions not implemented yet)
-    // We would store hashRefreshToken(refresh.token) with userId, expiresAt, ip/userAgent/fingerprint
+    // Persist session (hash only) - integration handled by HTTP route using createSessionForLogin
+    // We still compute hash here to demonstrate policy (not stored here)
     const refreshHash = hashRefreshToken(refresh.token);
-    void refreshHash; // placeholder to avoid lint error
+    void refreshHash;
     void context;
 
     return {

@@ -30,32 +30,27 @@ loginRouter.post('/login', async (req: Request, res: Response, _next: NextFuncti
 
     // Persist refresh session (hash only)
     await createSessionForLogin(result.user.id, result.refreshToken, {
+      exp: Math.floor(Date.now() / 1000) + jwt.getConfig().refreshTtlSec,
       ip: req.ip,
       userAgent: req.headers['user-agent'] as string | undefined,
     });
 
-    return res.status(200).json(result);
+    return res.status(200).json({
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      tokenType: result.tokenType,
+      expiresIn: result.expiresIn,
+      refreshExpiresIn: result.refreshExpiresIn,
+      user: result.user,
+    });
   } catch (err: any) {
-    const code = typeof err?.code === 'number' ? err.code : undefined;
-    switch (err?.message) {
-      case 'invalid_input':
-        logger.warn('Login invalid input');
-        return res.status(400).json({ error: 'invalid_input' });
-      case 'invalid_credentials':
-        logger.warn('Login invalid credentials');
-        return res.status(401).json({ error: 'invalid_credentials' });
-      case 'account_disabled':
-        logger.info('Login blocked: account disabled');
-        return res.status(403).json({ error: 'account_disabled' });
-      case 'account_unverified':
-        logger.info('Login blocked: account unverified');
-        return res.status(403).json({ error: 'account_unverified' });
-      default:
-        if (code === 401) {
-          return res.status(401).json({ error: 'invalid_credentials' });
-        }
-        logger.error('Login internal error');
-        return res.status(500).json({ error: 'internal_error' });
-    }
+    const code = err?.code || 400;
+    const errMsg = typeof err?.message === 'string' ? err.message : 'invalid_input';
+
+    if (code === 401) return res.status(401).json({ error: errMsg });
+    if (code === 403) return res.status(403).json({ error: errMsg });
+
+    logger.warn('Login error');
+    return res.status(400).json({ error: 'invalid_input' });
   }
 });

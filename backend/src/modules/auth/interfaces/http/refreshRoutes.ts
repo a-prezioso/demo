@@ -66,7 +66,7 @@ refreshRouter.post('/refresh', async (req: Request, res: Response, _next: NextFu
     const user = await authRepo.findById(rec.userId);
     if (!user || user.status !== 'ACTIVE') {
       // On user no longer valid, revoke this session and return 401
-      await sessions.revokeByTokenHash(hash);
+      await sessions.revokeByTokenHash(hash, { reason: 'user_invalid' });
       return res.status(401).json({ error: 'invalid_refresh' });
     }
 
@@ -105,7 +105,7 @@ refreshRouter.post('/logout', async (req: Request, res: Response, _next: NextFun
       const hash = hashRefreshToken(providedToken);
       const rec = await sessions.findByTokenHash(hash);
       if (rec) {
-        await sessions.revokeAllForUser(rec.userId);
+        await sessions.revokeAllForUser(rec.userId, { reason: 'logout_all' });
       }
       return res.status(204).send();
     }
@@ -115,7 +115,7 @@ refreshRouter.post('/logout', async (req: Request, res: Response, _next: NextFun
     }
 
     const hash = hashRefreshToken(providedToken);
-    await sessions.revokeByTokenHash(hash);
+    await sessions.revokeByTokenHash(hash, { reason: 'logout' });
     return res.status(204).send();
   } catch (_err) {
     return res.status(204).send();
@@ -136,3 +136,9 @@ export const createSessionForLogin = async (userId: string, refreshToken: string
     fingerprint: meta?.fingerprint,
   });
 };
+
+// Optional maintenance endpoint to trigger cleanup (not exposed in production)
+refreshRouter.post('/tasks/cleanup-expired', async (_req: Request, res: Response) => {
+  const removed = await sessions.cleanupExpired();
+  return res.status(200).json({ removed });
+});
