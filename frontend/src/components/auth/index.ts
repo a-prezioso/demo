@@ -1,1 +1,1 @@
-export { AuthPage, LoginForm, SignupForm } from './AuthPage';
+export { default as AuthPage, AuthPage as AuthPageComponent, LoginForm, SignupForm } from './AuthPage';
