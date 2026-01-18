@@ -21,3 +21,20 @@ Security services added:
 - validation utilities for email normalization/validation and password policy enforcement
 - high-level helpers: hashPassword(), verifyPassword()
 - UserService now validates email and password strength before hashing
+
+HTTP API added:
+- Express server in src/server.ts
+- Auth routes in src/modules/user/interfaces/http/authRoutes.ts exposing POST /api/auth/signup
+  - Validates input using validateSignupInput()
+  - Uses UserService for normalization + hashing + creation
+  - Responds 201 with non-sensitive user fields
+  - Error handling: 400 invalid input, 409 duplicate email, 500 internal errors
+
+Repository additions:
+- InMemoryUserRepository for development/testing
+- DuplicateEmailError to signal unique email violation from repository/DB layer
+
+To run locally (example):
+- Add a package.json with express and types, then ts-node/ts-node-dev for dev runs
+- Start server: ts-node src/server.ts (or compile with tsc if configured)
+

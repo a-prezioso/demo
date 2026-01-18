@@ -28,3 +28,39 @@ export class UserRepository implements IUserRepository {
     return Promise.resolve(null);
   }
 }
+
+// Error thrown by repository implementations when unique email violation occurs
+export class DuplicateEmailError extends Error {
+  constructor(message = 'Email already exists') {
+    super(message);
+    this.name = 'DuplicateEmailError';
+  }
+}
+
+// In-memory repository implementation for development/testing purposes
+// Provides uniqueness checks and simulates race-condition protection at the repository level.
+export class InMemoryUserRepository implements IUserRepository {
+  private byId: Map<string, User> = new Map();
+  private byEmail: Map<string, string> = new Map(); // email -> id
+
+  async create(user: User): Promise<User> {
+    const emailKey = user.email.toLowerCase();
+    if (this.byEmail.has(emailKey)) {
+      throw new DuplicateEmailError();
+    }
+    this.byId.set(user.id, user);
+    this.byEmail.set(emailKey, user.id);
+    return user;
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    const emailKey = email.toLowerCase();
+    const id = this.byEmail.get(emailKey);
+    if (!id) return null;
+    return this.byId.get(id) ?? null;
+  }
+
+  async findById(id: string): Promise<User | null> {
+    return this.byId.get(id) ?? null;
+  }
+}
