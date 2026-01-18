@@ -1,0 +1,10 @@
+{
+  "name": "smartdesk-monorepo",
+  "private": true,
+  "workspaces": [
+    "backend"
+  ],
+  "scripts": {
+    "test": "npm -w backend test"
+  }
+}
