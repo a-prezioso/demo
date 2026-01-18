@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import type { IDesksRepository } from '../repository/DesksRepository';
-import { DesksController } from './DesksController';
+import type { IBookingRepository } from '../repository/BookingRepository';
+import { BookingController } from './BookingController';
 
-export function registerDeskRoutes(router: Router, repo: IDesksRepository): Router {
-  const ctrl = DesksController.build(repo);
-  router.get('/api/desks', ctrl.getDesks);
+// Registers booking routes under /api/prenotazioni
+export function registerBookingRoutes(router: Router, repo: IBookingRepository): Router {
+  const ctrl = BookingController.build(repo);
+  router.post('/api/prenotazioni', ctrl.create);
   return router;
 }
