@@ -41,13 +41,25 @@ Security services
   JWT_SECRET (required in prod)
   JWT_ISSUER (smartdesk)
   JWT_AUDIENCE (smartdesk-clients)
-  JWT_ACCESS_EXPIRES_IN (seconds, default 900)
-  JWT_REFRESH_EXPIRES_IN (seconds, default 2592000)
+  JWT_ACCESS_EXPIRES_IN (900)
+  JWT_REFRESH_EXPIRES_IN (2592000)
 
-API endpoints
-- POST /api/auth/signup: { email, password } -> 201 Created
-- POST /api/auth/login: { email, password } -> 200 { accessToken, refreshToken, tokenType, expiresIn, user }
+HTTP API
+- POST /api/auth/signup {email, password}
+- POST /api/auth/login {email, password}
+- GET /api/secure/profile Authorization: Bearer <accessToken>
+- GET /api/secure/admin/metrics Authorization: Bearer <accessToken with ADMIN role>
 
-Testing
-- jest + supertest + pg-mem. Run: npm test
+Protecting routes
+- Use requireAuth([options]) middleware from src/api/middleware/auth.js
+  Options:
+  - roles: ["ADMIN", ...] to restrict access
+  - requireAll: boolean, if true all roles must be present
+  - isTokenRevoked(payload, token, req): optional async hook to check
+    token/session revocation (e.g., consult auth_refresh_tokens)
+- requireRoles([roles], { requireAll }) can be composed after requireAuth
 
+Examples
+const { requireAuth, requireRoles } = require("./src/api/middleware/auth");
+app.get("/api/secure/profile", requireAuth(), handler);
+app.get("/api/secure/admin/metrics", requireAuth({ roles: ["ADMIN"] }), requireRoles(["ADMIN"]), handler);
