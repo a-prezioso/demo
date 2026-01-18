@@ -1,49 +1,55 @@
-import { canCancelBooking, computeStartAtUTC } from '../booking.cancellation.service';
-import type { Booking } from '../booking.model';
+import { canUserCancelBooking, computeStartAt, decideCancellation } from '../booking.cancellation.service';
 
-function makeBooking(dateIso: string): Booking {
-  return {
-    id: 'b1',
-    userId: 'u1',
-    deskId: 'd1',
-    date: new Date(`${dateIso}T00:00:00.000Z`),
-    status: 'confirmed',
-    createdAt: new Date(`${dateIso}T00:00:00.000Z`),
-    updatedAt: new Date(`${dateIso}T00:00:00.000Z`),
-  };
-}
+// declare jest for TS without types
+declare const jest: any;
 
-describe('booking.cancellation.service', () => {
-  test('computeStartAtUTC builds start at default 09:00Z', () => {
-    const d = new Date('2025-02-10T00:00:00.000Z');
-    const start = computeStartAtUTC(d);
-    expect(start.toISOString()).toBe('2025-02-10T09:00:00.000Z');
+describe('booking.cancellation.service - policy decisions', () => {
+  const cfg = { defaultStartHourUtc: 9, defaultStartMinuteUtc: 0, cutoffHours: 24 } as const;
+
+  function d(iso: string) { return new Date(iso); }
+
+  test('allows cancellation when more than 24h before start', () => {
+    // Booking date 2026-01-10 09:00Z, now is 2026-01-09 08:59Z => 24h01m remaining
+    const date = d('2026-01-10T00:00:00.000Z');
+    const startAt = computeStartAt(date, cfg);
+    const now = d('2026-01-09T08:59:00.000Z');
+
+    const res = canUserCancelBooking({ date, startAt }, cfg, now);
+    expect(res.allowed).toBe(true);
+    expect(res.hoursBeforeStart && res.hoursBeforeStart).toBeGreaterThan(24);
   });
 
-  test('canCancelBooking allows only if more than 24 hours before start', () => {
-    const booking = makeBooking('2025-02-10');
+  test('denies cancellation exactly at 24h boundary', () => {
+    const date = d('2026-01-10T00:00:00.000Z');
+    const startAt = computeStartAt(date, cfg); // 2026-01-10 09:00Z
+    const now = d('2026-01-09T09:00:00.000Z');
 
-    // Now set to 2025-02-09T08:59Z -> start at 2025-02-10T09:00Z, diff just over 24h
-    const now1 = new Date('2025-02-09T08:59:00.000Z');
-    const res1 = canCancelBooking(booking, { now: now1 });
-    expect(res1.allowed).toBe(true);
-
-    // Now exactly 24h before -> not allowed
-    const now2 = new Date('2025-02-09T09:00:00.000Z');
-    const res2 = canCancelBooking(booking, { now: now2 });
-    expect(res2.allowed).toBe(false);
-
-    // Inside 24h window -> not allowed
-    const now3 = new Date('2025-02-09T10:00:00.000Z');
-    const res3 = canCancelBooking(booking, { now: now3 });
-    expect(res3.allowed).toBe(false);
+    const res = canUserCancelBooking({ date, startAt }, cfg, now);
+    expect(res.allowed).toBe(false);
+    expect(Math.round((res.hoursBeforeStart || 0) * 60)).toBe(24 * 60);
   });
 
-  test('policy can be customized (e.g., start time and cutoff)', () => {
-    const booking = makeBooking('2025-02-10');
-    const now = new Date('2025-02-09T08:00:00.000Z');
-    const res = canCancelBooking(booking, { now, policy: { defaultStartHourUtc: 8, cutoffHours: 12 } });
-    // start at 08:00Z next day -> 24h; cutoff 12h, 24 > 12 -> allowed
+  test('denies cancellation when less than 24h remain (23h59m)', () => {
+    const date = d('2026-01-10T00:00:00.000Z');
+    const startAt = computeStartAt(date, cfg);
+    const now = d('2026-01-09T09:01:00.000Z');
+
+    const res = canUserCancelBooking({ date, startAt }, cfg, now);
+    expect(res.allowed).toBe(false);
+    expect(res.hoursBeforeStart || 0).toBeLessThan(24);
+  });
+
+  test('timezone correctness: computeStartAt always uses UTC midnight + configured time', () => {
+    const date = d('2026-06-15T13:45:12.000Z'); // time part should be ignored
+    const startAt = computeStartAt(date, cfg);
+    expect(startAt.toISOString()).toBe('2026-06-15T09:00:00.000Z');
+  });
+
+  test('decideCancellation is a thin wrapper of canUserCancelBooking', () => {
+    const date = d('2026-01-10T00:00:00.000Z');
+    const startAt = computeStartAt(date, cfg);
+    const now = d('2026-01-09T08:58:00.000Z');
+    const res = decideCancellation({ date, startAt }, now, cfg);
     expect(res.allowed).toBe(true);
   });
 });

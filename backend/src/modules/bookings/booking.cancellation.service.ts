@@ -23,6 +23,21 @@ const DEFAULTS: Required<CancellationPolicyConfig> = {
   cutoffHours: 24,
 };
 
+function envInt(name: string, fallback: number): number {
+  const v = process.env && process.env[name];
+  if (!v) return fallback;
+  const n = parseInt(String(v), 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+export function getCancellationPolicyFromEnv(): Required<CancellationPolicyConfig> {
+  return {
+    defaultStartHourUtc: envInt('BOOKING_START_HOUR_UTC', DEFAULTS.defaultStartHourUtc),
+    defaultStartMinuteUtc: envInt('BOOKING_START_MINUTE_UTC', DEFAULTS.defaultStartMinuteUtc),
+    cutoffHours: envInt('BOOKING_CANCEL_CUTOFF_HOURS', DEFAULTS.cutoffHours),
+  } as Required<CancellationPolicyConfig>;
+}
+
 export function computeStartAt(date: Date, cfg: Required<CancellationPolicyConfig>): Date {
   const iso = date.toISOString().slice(0, 10);
   return new Date(`${iso}T${String(cfg.defaultStartHourUtc).padStart(2, '0')}:${String(
@@ -41,7 +56,8 @@ export function canUserCancelBooking(
   const diffMs = start.getTime() - current.getTime();
   const hours = diffMs / (1000 * 60 * 60);
 
-  if (hours >= cfg.cutoffHours) {
+  // Business rule: allowed only when strictly more than cutoff hours remain
+  if (hours > cfg.cutoffHours) {
     return { allowed: true, startAt: start, now: current, hoursBeforeStart: hours };
   }
   return {
@@ -51,4 +67,13 @@ export function canUserCancelBooking(
     now: current,
     hoursBeforeStart: hours,
   };
+}
+
+// Convenience wrapper used by controllers
+export function decideCancellation(
+  booking: { date: Date; startAt?: Date | null },
+  now?: Date,
+  config?: CancellationPolicyConfig,
+): CancellationDecision {
+  return canUserCancelBooking(booking, config, now);
 }
