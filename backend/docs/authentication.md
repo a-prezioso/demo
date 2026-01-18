@@ -150,3 +150,144 @@ Esempio payload:
 
 ## Modello dati aggiuntivo (Prisma)
 Vedi schema.prisma per il modello Session. Migrazione inclusa: prisma/migrations/202601180002_auth_sessions.
+
+---
+
+# Dettagli di implementazione (MVP attuale)
+
+Questa sezione documenta lo stato effettivo dell’implementazione presente nel codice (MVP), allineata ai test di integrazione/unità.
+
+## Panoramica access/refresh token
+- Formato access token: JWT firmato HS256.
+- Claims principali: sub (userId), email, roles (opzionale), iss, aud, iat, exp.
+- Durate di default (configurabili via env):
+  - ACCESS_TOKEN_TTL (secondi), default 900 (15 min)
+  - REFRESH_TOKEN_TTL (secondi), default 2592000 (30 giorni)
+- Generazione/Verifica: gestite da JwtService, che si appoggia alla secret in JWT_SECRET. La verifica esegue anche controlli di exp/iat/nbf e issuer/audience se presenti.
+
+## Middleware JWT e protezione rotte
+- Middleware: requireAuth (src/core/jwt/authMiddleware.ts)
+  - Estrae il token dal header Authorization: "Bearer <token>".
+  - Verifica integrità e scadenza (JwtService.verify). In caso di errore:
+    - Nessun header o token mancante -> 401 { error: "unauthorized" }
+    - Token scaduto -> 401 { error: "token_expired" }
+    - Token malformato o firma non valida -> 401 { error: "invalid_token" }
+  - Se valido, allega a req.user: { id, email, roles } e a req.auth: { claims }.
+  - Supporta controllo ruoli opzionale: requireRoles(["admin"]) risponde 403 { error: "forbidden" } se i ruoli non soddisfano i requisiti.
+- Rotte protette nel server (src/server.ts):
+  - Prefisso /api/private protetto globalmente con requireAuth.
+  - Esempi:
+    - GET /api/private/ping -> 200 se token valido; 401 altrimenti.
+    - GET /api/protected/profile -> protetto con requireAuth, restituisce profilo minimo.
+    - GET /api/admin/overview -> protetto con requireRoles(["admin"]).
+
+## Specifica endpoint /api/auth/refresh (stato attuale)
+- Metodo/URL: POST /api/auth/refresh
+- Input accettato:
+  - Body JSON: { "refreshToken": "<token>" }
+  - Oppure cookie "refreshToken" o "rt" (se inviato dal client). Il server attuale non imposta cookie; accetta solo per comodità.
+- Validazioni:
+  - Se manca il token -> 400 { error: "invalid_input" }
+  - Calcolo hash del token e lookup della sessione attiva e non revocata.
+  - Se assente, scaduta o revocata -> 401 { error: "invalid_refresh" }
+  - Verifica che l’utente esista e sia ACTIVE; altrimenti revoca la sessione e risponde 401.
+- Risposta (MVP):
+  - 200 { accessToken: string, tokenType: "Bearer", expiresIn: number }
+  - Nota: nel MVP non viene ruotato/emesso un nuovo refresh token nella risposta; il refresh token rimane invariato. La rotazione è consigliata in produzione.
+- Codici di errore:
+  - 400 invalid_input
+  - 401 invalid_refresh
+
+## Specifica endpoint /api/auth/logout (stato attuale)
+- Metodo/URL: POST /api/auth/logout
+- Body:
+  - { refreshToken: string } per logout della singola sessione
+  - { refreshToken: string, all: true } per revocare tutte le sessioni dell’utente associato a quel refresh token
+  - Cookie: opzionalmente può leggere "refreshToken"/"rt"; il server non imposta cookie.
+- Risposte:
+  - 204 No Content (idempotente)
+  - 400 { error: "invalid_input" } se mancano parametri necessari per all=true
+
+## Esempi richieste/risposte
+
+### Login
+Richiesta:
+
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"ValidP@ssw0rd!"}'
+
+Risposta 200:
+{
+  "accessToken": "<jwt>",
+  "refreshToken": "<opaque-token>",
+  "tokenType": "Bearer",
+  "expiresIn": 900,
+  "refreshExpiresIn": 2592000,
+  "user": { "id": "<uuid>", "email": "user@example.com", "status": "ACTIVE" }
+}
+
+### Accesso a risorsa protetta
+Richiesta:
+
+curl http://localhost:3000/api/private/ping \
+  -H "Authorization: Bearer <jwt>"
+
+Risposte:
+- 200 { "pong": true, "userId": "<uuid>" }
+- 401 { "error": "unauthorized" | "invalid_token" | "token_expired" }
+
+### Refresh token (MVP)
+Richiesta con body:
+
+curl -X POST http://localhost:3000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<opaque-token>"}'
+
+Oppure con cookie inviato dal client:
+
+curl -X POST http://localhost:3000/api/auth/refresh \
+  -H "Cookie: refreshToken=<opaque-token>"
+
+Risposta 200:
+{
+  "accessToken": "<jwt>",
+  "tokenType": "Bearer",
+  "expiresIn": 900
+}
+
+Errori possibili:
+- 400 { "error": "invalid_input" }
+- 401 { "error": "invalid_refresh" }
+
+### Logout
+
+curl -X POST http://localhost:3000/api/auth/logout \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<opaque-token>"}'
+
+Risposta: 204 No Content
+
+## Note di sicurezza (raccomandazioni)
+- Usa sempre HTTPS/TLS; non trasmettere token su canali non cifrati.
+- Non salvare l’access token in localStorage. Preferire:
+  - In SPA: conservare l’access token solo in memoria (variabile runtime) e rinnovarlo con refresh token.
+  - Conservare il refresh token in cookie HttpOnly+Secure con SameSite=Lax/Strict, impostato dal frontend (il backend MVP non imposta cookie).
+- Non loggare mai token (né access né refresh) o segreti (JWT_SECRET). I log devono essere redatti.
+- TTL breve per access token (es. 15 min) limita l’impatto in caso di furto; prevedere revoca/blacklist per refresh token.
+- In caso di furto di refresh token, un attaccante può ottenere nuovi access token finché la sessione non è revocata o scade: prevedere
+  - Logout/all: POST /api/auth/logout { all: true }
+  - Rotazione del refresh token ad ogni uso (da implementare in futuro) e rilevamento uso anomalo (token reuse detection).
+- Proteggere endpoint di login con rate limit/lockout; monitorare tentativi falliti.
+- Validare e sanificare sempre gli input; non esporre dettagli sugli errori (es. distinguere email inesistente vs password errata).
+
+## Variabili d’ambiente rilevanti
+- JWT_SECRET: segreto HMAC (consigliato >= 256 bit)
+- JWT_ISSUER / JWT_AUDIENCE: issuer e audience attese
+- ACCESS_TOKEN_TTL / REFRESH_TOKEN_TTL: durate in secondi
+- JWT_CLOCK_SKEW_SEC: tolleranza clock skew in verifica token (default 30s)
+
+## Allineamento implementazione vs. design
+- Refresh rotation: nel design è prevista; nel MVP la risposta di /api/auth/refresh restituisce solo un nuovo access token e NON un nuovo refresh token. Il token di refresh rimane invariato nella sessione.
+- Cookie: il backend accetta refresh token anche via cookie ("refreshToken" o "rt"), ma non setta cookie nelle risposte. Il frontend può gestire un cookie HttpOnly.
+- Ruoli: supporto base nel payload e nel middleware (requireRoles), ma non c’è gestione persistente dei ruoli al momento.
