@@ -12,6 +12,11 @@ export interface Booking {
   userId: string;
   deskId: string; // keep as TEXT id to align with current desks model
   date: Date; // date-only (UTC midnight)
+  /**
+   * Optional explicit start datetime in UTC. If absent, services may derive it
+   * from `date` using a configured default start time (e.g., 09:00 UTC).
+   */
+  startAt?: Date;
   status: BookingStatus; // legacy status kept for backward compatibility
   // New derived/managed state (optional for retro-compatibility)
   state?: BookingState;
