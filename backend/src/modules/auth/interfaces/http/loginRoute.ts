@@ -8,6 +8,7 @@ import { ScryptPasswordHasher } from '../../../../core/security/passwordHasher';
 import { JwtService } from '../../../../core/jwt/jwtService';
 import { AuthService } from '../../domain/AuthService';
 import { logger } from '../../../../core/logging/logger';
+import { createSessionForLogin } from './refreshRoutes';
 
 // Wire dependencies (mirror pattern from signup route) reusing the same in-memory repo
 const hasher = new ScryptPasswordHasher();
@@ -23,6 +24,12 @@ loginRouter.post('/login', async (req: Request, res: Response, _next: NextFuncti
     const { email, password } = req.body || {};
 
     const result = await authService.login(email, password, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] as string | undefined,
+    });
+
+    // Persist refresh session (hash only)
+    await createSessionForLogin(result.user.id, result.refreshToken, {
       ip: req.ip,
       userAgent: req.headers['user-agent'] as string | undefined,
     });

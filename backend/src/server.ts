@@ -4,6 +4,7 @@
 import express from 'express';
 import { authRouter } from './modules/user/interfaces/http/authRoutes';
 import { loginRouter } from './modules/auth/interfaces/http/loginRoute';
+import { refreshRouter } from './modules/auth/interfaces/http/refreshRoutes';
 import { logger } from './core/logging/logger';
 import { requireAuth, requireRoles } from './core/jwt/authMiddleware';
 
@@ -13,6 +14,7 @@ app.use(express.json());
 // Base path for API
 app.use('/api/auth', authRouter);
 app.use('/api/auth', loginRouter);
+app.use('/api/auth', refreshRouter);
 
 // Example protected routes pattern (for future reuse)
 app.get('/api/protected/profile', requireAuth(), (req, res) => {
