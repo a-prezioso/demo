@@ -10,7 +10,7 @@
 import type { RequestLike, ResponseLike } from '../auth/auth.controller';
 import type { AuthenticatedRequestLike } from '../auth/jwt.middleware';
 import { computeDisabledDates, parseIsoDate } from '../../modules/calendar/holiday.service';
-import { createBooking, findBookingByDeskAndDate, countUserBookingsOnDate } from '../../modules/bookings/booking.repository';
+import { createBooking, findBookingByDeskAndDate, countUserBookingsOnDate, listUserBookings } from '../../modules/bookings/booking.repository';
 
 function normalizeDateOnly(input: string): Date | null {
   const d = parseIsoDate(input);
@@ -105,4 +105,28 @@ export async function createBookingHandler(req: AuthenticatedRequestLike & { bod
     return;
   }
   await handleCreate(userId, String(deskId || ''), String(date || ''), res);
+}
+
+// Handler for GET /api/bookings/me?page=&size=&includeCanceled=
+export async function listMyBookingsHandler(req: AuthenticatedRequestLike & { query?: any }, res: ResponseLike) {
+  const userId = getAuthUserId(req, null);
+  if (!userId) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
+  const page = Number((req as any)?.query?.page || 1);
+  const size = Number((req as any)?.query?.size || 20);
+  const includeCanceled = String((req as any)?.query?.includeCanceled || 'false') === 'true';
+
+  try {
+    const result = await listUserBookings(userId, { page, size, includeCanceled });
+    res.status(200).json({
+      page: result.page,
+      size: result.size,
+      total: result.total,
+      items: result.items,
+    });
+  } catch (_e) {
+    res.status(500).json({ error: 'internal_error' });
+  }
 }
