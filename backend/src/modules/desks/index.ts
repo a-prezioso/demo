@@ -1,4 +1,2 @@
-export type { DeskState, DeskStatusDTO } from './domain/DeskDTO';
-export { InMemoryDeskRepository } from './repository/DeskRepository';
-export { DeskService } from './service/DeskService';
-export { registerDeskRoutes } from './http/routes';
+export { HolidaysService } from './service/HolidaysService';
+export type { HolidaysConfig } from './service/HolidaysService';
