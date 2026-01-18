@@ -5,12 +5,32 @@ import { SeatMap } from "../components/SeatMap";
 import { Legend } from "../components/Legend";
 import { InfoBottomSheet } from "../components/InfoBottomSheet";
 import { RefreshButton } from "../components/RefreshButton";
+import { ConfirmBookingModal } from "../components/ConfirmBookingModal";
+
+function todayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatItDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, (m - 1), d));
+  return dt.toLocaleDateString("it-IT", { timeZone: "UTC" });
+}
 
 export const DashboardPostazioni: React.FC = () => {
   const [seats, setSeats] = useState<Seat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Seat | null>(null);
+
+  // Conferma prenotazione (popup)
+  const [confirmSeat, setConfirmSeat] = useState<Seat | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   // Controls for avoiding duplicate requests and managing abort/polling
   const abortRef = useRef<AbortController | null>(null);
@@ -88,9 +108,31 @@ export const DashboardPostazioni: React.FC = () => {
   const handleRetry = () => load({ force: true });
   const handleSelect = (s: Seat) => setSelected(s);
   const handleCloseSheet = () => setSelected(null);
+
+  // Prenota da bottom sheet: apri conferma
   const handleBook = (s: Seat) => {
-    // hook prenotazione: per ora redirect a route fittizia
-    window.location.href = `/prenotazioni/nuova?seatId=${encodeURIComponent(s.id)}`;
+    setSelected(null); // chiudi bottom sheet
+    setConfirmSeat(s);
+    setConfirmError(null);
+  };
+
+  const currentDateIso = todayIso(); // TODO: usare data selezionata da contesto se presente
+  const currentDateLabel = formatItDate(currentDateIso);
+
+  // Conferma prenotazione: placeholder → redirect a pagina prenotazione
+  const handleConfirmBooking = async (s: Seat) => {
+    try {
+      setConfirmLoading(true);
+      setConfirmError(null);
+      // TODO: integrare chiamata API POST /api/bookings quando disponibile
+      const target = `/prenotazioni/nuova?seatId=${encodeURIComponent(s.id)}&date=${encodeURIComponent(currentDateIso)}`;
+      window.location.href = target;
+    } catch (e) {
+      setConfirmError((e as Error).message || "Impossibile confermare");
+    } finally {
+      setConfirmLoading(false);
+      setConfirmSeat(null);
+    }
   };
 
   const hasData = useMemo(() => seats && seats.length > 0, [seats]);
@@ -132,6 +174,15 @@ export const DashboardPostazioni: React.FC = () => {
       <RefreshButton onClick={() => load({ force: true })} />
 
       <InfoBottomSheet seat={selected} onClose={handleCloseSheet} onBook={handleBook} />
+
+      <ConfirmBookingModal
+        seat={confirmSeat}
+        dateLabel={currentDateLabel}
+        onCancel={() => setConfirmSeat(null)}
+        onConfirm={handleConfirmBooking}
+        loading={confirmLoading}
+        error={confirmError}
+      />
     </div>
   );
 };
