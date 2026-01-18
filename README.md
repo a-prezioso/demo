@@ -37,29 +37,25 @@ Security services
   SECURITY_PASSWORD_REQUIRE_LOWERCASE (true)
   SECURITY_PASSWORD_REQUIRE_NUMBER (true)
   SECURITY_PASSWORD_REQUIRE_SYMBOL (true)
-  SECURITY_PASSWORD_FORBID_COMMON (true)
-  JWT_SECRET (required in prod)
+  JWT_SECRET (dev default in code; set in prod)
   JWT_ISSUER (smartdesk)
   JWT_AUDIENCE (smartdesk-clients)
   JWT_ACCESS_EXPIRES_IN (900)
   JWT_REFRESH_EXPIRES_IN (2592000)
 
 HTTP API
-- POST /api/auth/signup {email, password}
-- POST /api/auth/login {email, password}
-- GET /api/secure/profile Authorization: Bearer <accessToken>
-- GET /api/secure/admin/metrics Authorization: Bearer <accessToken with ADMIN role>
+- POST /api/auth/signup { email, password } -> 201 { id, email, status, created_at, updated_at }
+- POST /api/auth/login { email, password } -> 200 { accessToken, refreshToken, tokenType, expiresIn, user }
+- POST /api/auth/refresh { refreshToken, [rotate=true] } -> 200 { accessToken, refreshToken?, tokenType, expiresIn }
+  - Validates refresh token by sha256(token) match in DB, not revoked/expired, user status ok
+  - If rotate=true (default), old session is revoked and a new refresh token is issued (rotation)
+  - If rotate=false, reuses the same refresh token and only updates last_used_at
+- POST /api/auth/logout { refreshToken } -> 204 (revoke provided refresh token)
+- POST /api/auth/logout { allSessions: true } with Authorization: Bearer <access> -> 204 (revoke all sessions for user)
+- GET /api/secure/profile with Authorization: Bearer <access> -> 200 { user }
+- GET /api/secure/admin/metrics with Authorization: Bearer <access> (ADMIN) -> 200
 
-Protecting routes
-- Use requireAuth([options]) middleware from src/api/middleware/auth.js
-  Options:
-  - roles: ["ADMIN", ...] to restrict access
-  - requireAll: boolean, if true all roles must be present
-  - isTokenRevoked(payload, token, req): optional async hook to check
-    token/session revocation (e.g., consult auth_refresh_tokens)
-- requireRoles([roles], { requireAll }) can be composed after requireAuth
-
-Examples
-const { requireAuth, requireRoles } = require("./src/api/middleware/auth");
-app.get("/api/secure/profile", requireAuth(), handler);
-app.get("/api/secure/admin/metrics", requireAuth({ roles: ["ADMIN"] }), requireRoles(["ADMIN"]), handler);
+Notes
+- Error responses do not leak whether a refresh token exists; use generic 401 Invalid refresh token for invalid/expired/revoked tokens.
+- On login, refresh token is random URL-safe string (base64url of 48 random bytes); only its sha256 hash is stored.
+- Use HTTPS and httpOnly secure cookies for refresh token storage on the client where possible.

@@ -110,6 +110,132 @@ async function login({ email, password, userAgent, ip }) {
   };
 }
 
+async function refresh({ refreshToken, userAgent, ip, rotate = true }) {
+  // Validate input
+  if (typeof refreshToken !== "string" || refreshToken.length < 10) {
+    return { ok: false, code: 401, error: "Invalid refresh token" };
+  }
+
+  const tokenHash = hashToken(refreshToken);
+
+  // Lookup session and user
+  let row;
+  try {
+    const { rows } = await db.query(
+      `SELECT t.id as session_id, t.user_id, t.expires_at, t.revoked_at, t.last_used_at,
+              u.email, u.status, u.roles
+         FROM auth_refresh_tokens t
+         JOIN users u ON u.id = t.user_id
+        WHERE t.token_hash = $1
+        LIMIT 1`,
+      [tokenHash]
+    );
+    row = rows[0];
+  } catch (_e) {
+    return { ok: false, code: 500, error: "Internal server error" };
+  }
+
+  const invalid = { ok: false, code: 401, error: "Invalid refresh token" };
+  if (!row) return invalid;
+
+  // Check revoked or expired
+  const now = new Date();
+  if (row.revoked_at) return invalid;
+  if (row.expires_at && new Date(row.expires_at) <= now) return invalid;
+
+  // Check user status
+  if (row.status === "SUSPENDED" || row.status === "DISABLED") return { ok: false, code: 423, error: "Account is locked" };
+  if (row.status === "PENDING") return { ok: false, code: 403, error: "Please verify your email" };
+
+  const userId = row.user_id;
+  const userRoles = row.roles || ["USER"];
+
+  // Issue new access token
+  const payload = { sub: userId, email: row.email, roles: userRoles };
+  const { token: accessToken, expiresIn } = jwtService.sign(payload);
+
+  // Rotate refresh token by default for better security
+  if (rotate) {
+    const newRefresh = randomToken(48);
+    const clientUA = userAgent || null;
+    const clientIp = ip || null;
+    try {
+      await db.query(
+        `UPDATE auth_refresh_tokens SET revoked_at = now(), revoked_reason = $2, last_used_at = now() WHERE id = $1`,
+        [row.session_id, "rotated"]
+      );
+      await createRefreshSession(userId, newRefresh, { userAgent: clientUA, ip: clientIp });
+    } catch (err) {
+      return { ok: false, code: 500, error: "Internal server error" };
+    }
+
+    return {
+      ok: true,
+      code: 200,
+      data: { accessToken, refreshToken: newRefresh, tokenType: "Bearer", expiresIn },
+    };
+  }
+
+  // No rotation: update last_used_at best-effort
+  try {
+    await db.query(`UPDATE auth_refresh_tokens SET last_used_at = now() WHERE id = $1`, [row.session_id]);
+  } catch (_e) {
+    // ignore
+  }
+
+  return { ok: true, code: 200, data: { accessToken, refreshToken, tokenType: "Bearer", expiresIn } };
+}
+
+async function revokeByToken(refreshToken) {
+  if (typeof refreshToken !== "string" || refreshToken.length < 10) return false;
+  const tokenHash = hashToken(refreshToken);
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE auth_refresh_tokens SET revoked_at = now(), revoked_reason = $2 WHERE token_hash = $1 AND revoked_at IS NULL`,
+      [tokenHash, "logout"]
+    );
+    return rowCount > 0;
+  } catch (_e) {
+    return false;
+  }
+}
+
+async function revokeAllForUser(userId) {
+  if (!userId) return false;
+  try {
+    await db.query(
+      `UPDATE auth_refresh_tokens SET revoked_at = now(), revoked_reason = $2 WHERE user_id = $1 AND revoked_at IS NULL`,
+      [userId, "logout_all"]
+    );
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+async function logout({ refreshToken, accessToken, allSessions } = {}) {
+  // Logout should not leak whether a token existed; respond as success regardless
+  // If refreshToken provided -> revoke that one
+  if (typeof refreshToken === "string" && refreshToken.length > 0) {
+    await revokeByToken(refreshToken);
+    return { ok: true, code: 204 };
+  }
+
+  // If request wants to revoke all sessions for the authenticated user, try to verify access token
+  if (allSessions === true && typeof accessToken === "string" && accessToken.length > 10) {
+    const ver = jwtService.verify(accessToken);
+    if (ver && ver.valid && ver.payload && ver.payload.sub) {
+      await revokeAllForUser(ver.payload.sub);
+      return { ok: true, code: 204 };
+    }
+  }
+
+  // Bad request if neither provided
+  return { ok: false, code: 400, error: "Invalid request" };
+}
+
 module.exports = {
   login,
+  refresh,
+  logout,
 };

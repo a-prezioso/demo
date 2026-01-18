@@ -5,7 +5,7 @@ const router = express.Router();
 
 const { passwordService, validationService } = require("../../security");
 const db = require("../../db");
-const { login } = require("../services/authService");
+const { login, refresh, logout } = require("../services/authService");
 
 // Helper to safely send error responses
 function sendBadRequest(res, message) {
@@ -14,6 +14,16 @@ function sendBadRequest(res, message) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function getBearerToken(req) {
+  const header = req.headers && (req.headers["authorization"] || req.headers["Authorization"]);
+  if (!header || typeof header !== "string") return null;
+  const parts = header.trim().split(/\s+/);
+  if (parts.length !== 2) return null;
+  const [scheme, token] = parts;
+  if (/^Bearer$/i.test(scheme)) return token;
+  return null;
 }
 
 router.post("/signup", async (req, res) => {
@@ -106,6 +116,50 @@ router.post("/login", async (req, res) => {
   } finally {
     const durationMs = Date.now() - startedAt;
     console.log(JSON.stringify({ level: "info", msg: "login_request", duration_ms: durationMs, at: nowIso() }));
+  }
+});
+
+// Refresh endpoint
+router.post("/refresh", async (req, res) => {
+  const startedAt = Date.now();
+  try {
+    const { refreshToken, rotate } = req.body || {};
+    const ua = req.headers["user-agent"] || null;
+    const ip = req.ip || req.connection?.remoteAddress || null;
+
+    const result = await refresh({ refreshToken, userAgent: ua, ip, rotate: rotate !== false });
+    if (!result.ok) {
+      return res.status(result.code).json({ error: result.error });
+    }
+    return res.status(200).json(result.data);
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", msg: "refresh unexpected error", err: err.message }));
+    return res.status(500).json({ error: "Internal server error" });
+  } finally {
+    const durationMs = Date.now() - startedAt;
+    console.log(JSON.stringify({ level: "info", msg: "refresh_request", duration_ms: durationMs, at: nowIso() }));
+  }
+});
+
+// Logout / revoke endpoint
+router.post("/logout", async (req, res) => {
+  const startedAt = Date.now();
+  try {
+    const { refreshToken, allSessions } = req.body || {};
+    const bearer = getBearerToken(req);
+
+    const result = await logout({ refreshToken, accessToken: bearer, allSessions: allSessions === true });
+    if (!result.ok) {
+      return res.status(result.code).json({ error: result.error });
+    }
+
+    return res.status(result.code).send();
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", msg: "logout unexpected error", err: err.message }));
+    return res.status(500).json({ error: "Internal server error" });
+  } finally {
+    const durationMs = Date.now() - startedAt;
+    console.log(JSON.stringify({ level: "info", msg: "logout_request", duration_ms: durationMs, at: nowIso() }));
   }
 });
 
