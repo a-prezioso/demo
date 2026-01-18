@@ -7,19 +7,27 @@ import { verifyPassword } from '../../security/password.service';
 import { findUserByEmail } from '../../modules/users/user.repository';
 import { UserStatus } from '../../modules/users/user.model';
 import { signAccessToken, signRefreshToken, hashRefreshToken } from '../../security/jwt.service';
+import { validateEmail } from '../../security/validation.service';
+import { createUserSession } from '../../modules/sessions/session.repository';
 
 import type { RequestLike, ResponseLike } from './auth.controller';
 
 export async function loginHandler(req: RequestLike, res: ResponseLike): Promise<void> {
   try {
     const { email, password } = (req.body || {}) as { email?: string; password?: string };
-    const normalized = (email || '').trim().toLowerCase();
-    if (!normalized || !password) {
-      res.status(400).json({ error: 'invalid_input' });
+
+    // Validate inputs
+    const vEmail = validateEmail(email || '');
+    if (!vEmail.valid) {
+      res.status(400).json({ error: 'invalid_input', details: { email: vEmail.error } });
+      return;
+    }
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      res.status(400).json({ error: 'invalid_input', details: { password: 'password.too_short' } });
       return;
     }
 
-    const user = await findUserByEmail(normalized);
+    const user = await findUserByEmail(vEmail.normalized!);
     // Generic error for wrong credentials
     if (!user) {
       res.status(401).json({ error: 'invalid_credentials' });
@@ -40,10 +48,21 @@ export async function loginHandler(req: RequestLike, res: ResponseLike): Promise
     const access = signAccessToken({ id: user.id, email: user.email });
     const refresh = signRefreshToken({ id: user.id, email: user.email });
 
-    // NOTE: We only return tokens; storing refresh token hash in persistence requires a sessions repository
-    // which will be introduced with a refresh/session table. For now we return hash suggestion in comment.
-    const _refreshHash = hashRefreshToken(refresh.token);
-    // TODO: persist _refreshHash with userId, expiresAt, user-agent/ip for session tracking (future task)
+    // Persist refresh token hash and basic client info for session tracking
+    try {
+      const refreshHash = hashRefreshToken(refresh.token);
+      const userAgent = (req as any).headers?.['user-agent'] || (req as any).headers?.['User-Agent'] || null;
+      const ip = (req as any).ip || (req as any).ipAddress || (req as any).headers?.['x-forwarded-for'] || null;
+      await createUserSession({
+        userId: user.id,
+        refreshTokenHash: refreshHash,
+        expiresAt: refresh.expiresAt,
+        userAgent: typeof userAgent === 'string' ? userAgent : null,
+        ipAddress: typeof ip === 'string' ? ip : null,
+      });
+    } catch (_e) {
+      // Do not fail login if session persistence fails; log in real app
+    }
 
     res.status(200).json({
       accessToken: access.token,
@@ -51,6 +70,7 @@ export async function loginHandler(req: RequestLike, res: ResponseLike): Promise
       refreshToken: refresh.token,
       refreshTokenExpiresAt: refresh.expiresAt.toISOString(),
       tokenType: 'Bearer',
+      user: { id: user.id, email: user.email, status: user.status },
     });
   } catch (err) {
     res.status(500).json({ error: 'internal_error' });
