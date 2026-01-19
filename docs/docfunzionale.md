@@ -1,1 +1,23 @@
-Documento Funzionale: Progetto "SmartDesk Coworking"1. Visione del ProgettoL'obiettivo è creare una Progressive Web App (PWA) che permetta agli utenti di visualizzare una piantina interattiva di un ufficio coworking, selezionare una postazione e prenotarla. L'app deve essere ottimizzata per l'uso da smartphone e gestire automaticamente le chiusure durante i giorni festivi.2. Caratteristiche Tecniche PrincipaliApproccio: Mobile-First & Responsive (layout fluido da smartphone a desktop).Interfaccia Visiva: Mappa interattiva dei posti (Griglia o SVG).Logica Temporale: Gestione automatica dei giorni festivi italiani.3. Requisiti Funzionali (User Journey)A. AutenticazioneSistema di Login/Signup semplice (Email e Password).Profilo utente base (Nome, Cognome, Foto/Avatar).B. Dashboard Principale (La Mappa)Selettore Data: Un calendario o uno slider per scegliere il giorno della prenotazione.Visualizzazione Interattiva:Una rappresentazione grafica della stanza con 12 postazioni numerate.Stato Visivo:Verde: Libero.Rosso: Già occupato (mostra il nome di chi ha prenotato, opzionale).Grigio: Postazione non disponibile (manutenzione o distanziamento).Interazione: Cliccando su una postazione "Verde", si apre un popup di conferma con il riepilogo (Data, Numero Posto).C. Gestione Festività (Automazione)L'applicazione deve integrare una funzione che verifichi se la data selezionata è un festivo (es. 1° Maggio, 25 Dicembre, ecc.) o una domenica.Comportamento: Se la data è festiva, la mappa viene disabilitata e compare un messaggio: "Il Coworking è chiuso oggi per festività".D. Area "Le Mie Prenotazioni"Elenco cronologico delle prenotazioni effettuate dall'utente.Pulsante "Cancella Prenotazione" (disponibile solo se mancano più di 24h).Badge di stato (Passata, Attiva, Cancellata).4. Schema Dati (Database)TabellaCampi PrincipaliUsersID, Email, Password, FullNameDesksID, DeskNumber, Status (Active/Maintenance)BookingsID, UserID, DeskID, BookingDate, CreatedAtHolidaysID, DateName, Day, Month (per bloccare le date ricorrenti)5. UI/UX & Design (Look & Feel)Stile: Pulito, moderno, stile "SaaS" (colori: Blu scuro per i testi, Bianco per i background, Accenti in Verde per le azioni).Componenti Mobile:Bottom Navigation Bar: Per switchare tra "Mappa", "Mie Prenotazioni" e "Profilo".Touch Friendly: I posti nella mappa devono essere abbastanza grandi da essere cliccati facilmente con il pollice.Feedback Immediato: All'avvenuta prenotazione, mostrare una micro-animazione di successo.6. Logica dei Giorni Festivi (Dettaglio Tecnico)L'app deve bloccare automaticamente le seguenti date (Esempio Italia):Tutte le domeniche.1 Gennaio, 6 Gennaio, 25 Aprile, 1 Maggio, 2 Giugno, 15 Agosto, 1 Novembre, 8 Dicembre, 25-26 Dicembre.Extra: Calcolo automatico del Lunedì dell'Angelo (Pasquetta).
+Documento Funzionale: SmartDesk Coworking (MVP)
+1. Obiettivo
+PWA mobile-first per prenotare postazioni in un coworking con 6 posti.
+2. Funzionalità Core
+A. Autenticazione Base
+Login con email/password (no signup, utenti pre-registrati)
+Sessione JWT persistente
+B. Mappa Postazioni
+Visualizzazione di 6 postazioni in griglia 2x3
+Colori: Verde (libero), Rosso (occupato)
+Click su postazione libera → conferma prenotazione
+Selettore data (solo giorni feriali, weekend bloccato)
+C. Le Mie Prenotazioni
+Lista prenotazioni dell'utente
+Possibilità di cancellare (se > 24h prima)
+3. Schema Dati
+Tabella	Campi
+Users	id, email, password_hash, name
+Desks	id, number (1-6)
+Bookings	id, user_id, desk_id, date, status
+4. Vincoli
+Weekend automaticamente bloccato (no festività complesse)
+Massimo 1 prenotazione per utente per giorno
