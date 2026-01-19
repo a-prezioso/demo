@@ -1,174 +1,152 @@
-# Tech Stack - demo
+# Tech Stack - SmartDesk Coworking MVP
 
-**Versione:** 1.0  
-**Data:** 17/01/2026  
+**Versione:** 2.0  
+**Data:** 19/01/2026  
 **Autore:** Architect Agent  
 
 ---
 
-## 1. Panoramica Tecnologica
+## 1. Panoramica
 
-Il progetto **demo** è concepito (da architettura) come soluzione **full‑stack JavaScript/TypeScript** con:
+Stack **minimalista** per PWA di prenotazione postazioni coworking:
 
-- **Frontend:** SPA React
-- **Backend:** Node.js con framework HTTP (Express o Fastify)
-- **Database:** PostgreSQL
-- **Storage file:** Object storage (es. S3) o filesystem dedicato
-- **Autenticazione:** JWT (access + refresh token)
-- **Job asincroni:** worker Node.js separato
-
-Tuttavia, dal repository `elitesoftwarehouse/demo` attualmente risultano solo directory `.github` e `docs_re`, senza file di codice o di dipendenze (es. `package.json`, `tsconfig.json`, `Dockerfile`, ecc.).  
-Di conseguenza, le tecnologie elencate sotto derivano **dall’architettura di riferimento** fornita, non da analisi effettiva di codice o configurazioni concrete.
-
-Dove non sono presenti file per estrarre versioni reali, le versioni sono indicate come **raccomandate** / tipiche, coerenti con l’architettura.
+| Layer | Tecnologia |
+|-------|------------|
+| Frontend | React 18 + TypeScript |
+| Backend | Node.js + Express |
+| Database | PostgreSQL |
+| ORM | Prisma |
+| Auth | JWT + bcrypt |
 
 ---
 
-## 2. Core Platform
+## 2. Frontend
 
-| Tecnologia | Versione (indicativa) | Ruolo | Razionale |
-|------------|-----------------------|-------|-----------|
-| **Node.js** | 18 LTS o 20 LTS | Runtime backend & worker | Versioni LTS garantiscono stabilità, performance e supporto a lungo termine. |
-| **TypeScript** | 5.x | Linguaggio tipizzato per frontend e backend | Riduce errori runtime, migliora manutenibilità e DX. |
-| **npm** / **pnpm** / **yarn** | 9.x+ (npm, con Node 18) | Package manager | Gestione dipendenze e script di build / test. |
-| **Express** *oppure* **Fastify** | 4.x (Express) / 4.x (Fastify) | Framework HTTP per API REST | Express per semplicità e standard de facto; Fastify per performance superiori su carichi elevati. |
-| **React** | 18.x | Libreria UI frontend (SPA) | Ampio ecosistema, component model maturo, integrazione naturale con API REST e TypeScript. |
+| Tecnologia | Versione | Ruolo |
+|------------|----------|-------|
+| React | 18.x | UI Library |
+| TypeScript | 5.x | Type safety |
+| Vite | 5.x | Build tool |
+| React Router | 6.x | Routing |
+| TailwindCSS | 3.x | Styling |
 
-> Nota: senza `package.json` non è possibile fissare la versione esatta; le versioni sopra sono allineate allo stato dell’arte 2025–2026.
-
----
-
-## 3. Data Layer
-
-| Tecnologia | Versione (indicativa) | Ruolo |
-|------------|-----------------------|-------|
-| **PostgreSQL** | 14–16 | Database relazionale principale (USER, PROJECT, DOCUMENT, JOB, ecc.) |
-| **Prisma** *oppure* **TypeORM/Knex** | Prisma 5.x / TypeORM 0.3.x | ORM / Query Builder per Node.js, mapping schema e migrazioni |
-| **Migrazioni DB** (Prisma Migrate / TypeORM migrations / Flyway equivalente JS) | - | Gestione schema, evoluzione e versioning del database |
-
-**Note:**
-
-- L’architettura suggerisce **Prisma** come scelta preferita per DX (tipi generati, migrazioni integrate).
-- I file binari (documenti sorgente, documentazione generata) **non vengono salvati in DB**, ma solo i metadati (path, MIME type, ecc.).
+### PWA Features
+- Service Worker per offline
+- Manifest per installazione
+- Mobile-first responsive
 
 ---
 
-## 4. Presentation Layer
+## 3. Backend
 
-| Tecnologia | Versione (indicativa) | Ruolo |
-|------------|-----------------------|-------|
-| **React** | 18.x | Libreria per SPA e gestione componenti UI |
-| **React Router** | 6.x | Routing client‑side (navigazione tra pagine: progetti, documenti, job, ecc.) |
-| **TypeScript** | 5.x | Tipizzazione statica del frontend |
-| **UI Library** (es. **Material UI** / **Chakra UI** / **Bootstrap React**) | MUI 5.x / Chakra 2.x / React-Bootstrap 2.x | Componenti UI pronti all’uso, layout responsivi |
-| **React Query** *oppure* **Redux Toolkit / Zustand** | React Query 4.x | Gestione stato server (cache API, sincronizzazione con backend) |
-| **Axios** *oppure* `fetch` | Axios 1.x | Client HTTP per chiamate alle API REST |
-| **CSS / SCSS / CSS‑in‑JS** | ES6+ | Gestione stili (a seconda della libreria UI scelta) |
-
----
-
-## 5. Security Stack
-
-| Tecnologia / Meccanismo | Versione (indicativa) | Ruolo |
-|-------------------------|-----------------------|-------|
-| **JWT (JSON Web Token)** | RFC 7519 | Token‑based auth (access + refresh) |
-| **Libreria JWT Node.js** (es. `jsonwebtoken`) | 9.x | Firma e verifica token sul backend |
-| **bcrypt** / **argon2** | bcrypt 5.x / argon2 0.30+ | Hashing password sicuro |
-| **Helmet** (middleware) | 7.x | HTTP security headers (HSTS, XSS protection, ecc.) |
-| **CORS middleware** | - | Configurazione CORS per accesso SPA → API |
-| **Rate limiting middleware** (es. `express-rate-limit`) | 7.x | Protezione da brute force e abusi su login e endpoint critici |
-
-Autorizzazione basata su:
-
-- **RBAC (Role-Based Access Control):** ruoli `ADMIN`, `PM`, `USER`
-- Middleware custom per controllo ruoli e ownership delle risorse.
+| Tecnologia | Versione | Ruolo |
+|------------|----------|-------|
+| Node.js | 20 LTS | Runtime |
+| Express | 4.x | HTTP Framework |
+| TypeScript | 5.x | Type safety |
+| jsonwebtoken | 9.x | JWT auth |
+| bcrypt | 5.x | Password hashing |
+| zod | 3.x | Validation |
 
 ---
 
-## 6. External Integrations
+## 4. Database
 
-L’architettura non indica integrazioni specifiche con servizi esterni (API di terze parti) oltre allo **storage oggetti**. Sulla base della descrizione:
+| Tecnologia | Versione | Ruolo |
+|------------|----------|-------|
+| PostgreSQL | 15+ | Database |
+| Prisma | 5.x | ORM |
 
-| Servizio | Tipo | Scopo |
-|----------|------|-------|
-| **Object Storage S3‑compatibile** (es. AWS S3 / MinIO / GCS) | Storage binario | Conservazione documenti sorgenti e documentazione generata, versione file, download sicuro |
-| **Email provider** (ipotesi: SendGrid/Mailgun/SMTP) | Notifica (opzionale) | Notifiche su completamento job di generazione (se implementato in futuro) |
+### Schema
+```prisma
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  bookings     Booking[]
+  createdAt    DateTime  @default(now())
+}
 
-Poiché nel repository non sono presenti configurazioni (`.env`, `docker-compose`, codice) non è possibile indicare provider specifici o SDK utilizzati.
+model Desk {
+  id       Int       @id @default(autoincrement())
+  number   Int       @unique
+  bookings Booking[]
+}
 
----
+model Booking {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  desk      Desk     @relation(fields: [deskId], references: [id])
+  deskId    Int
+  date      DateTime @db.Date
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
 
-## 7. Infrastructure & Deployment
-
-| Tecnologia / Servizio | Ruolo |
-|-----------------------|-------|
-| **Docker** | Containerizzazione di backend, worker, frontend e (eventualmente) servizi di supporto |
-| **Docker Compose** o orchestratore (es. Kubernetes) | Esecuzione multi‑servizio in locale e deploy su ambienti gestiti |
-| **Reverse Proxy / Load Balancer** (es. **Nginx** / ingress controller K8s) | Terminazione TLS, instradamento verso API e frontend |
-| **Managed PostgreSQL** (es. Cloud SQL, RDS, Aurora Postgres‑compatibile) | Hosting DB in produzione con backup, replica e monitoring gestiti |
-| **Object Storage gestito** (S3, GCS, Azure Blob) | Storage persistente dei file caricati e generati |
-
-L’architettura cita *Cloud Run / GKE / equivalenti* come opzioni tipiche, ma il repository non contiene file di deploy (`Dockerfile`, `k8s manifests`, `cloudbuild.yaml`, ecc.), quindi la destinazione esatta non è deducibile.
-
----
-
-## 8. Development & Build Tools
-
-| Tool / Tecnologia | Ruolo |
-|-------------------|-------|
-| **Node.js toolchain** (`ts-node`, `tsc`) | Compilazione TypeScript e avvio applicazione (dev/prod) |
-| **Bundler Frontend** (es. **Vite** o **Webpack**) | Build dell’app React (bundling, minification, code splitting) |
-| **ESLint** | Linting e standard di stile per TS/JS |
-| **Prettier** | Formattazione automatica del codice |
-| **Husky** / **lint-staged** (opzionale) | Hook Git per enforcement lint/format su commit |
-| **CI/CD** (GitHub Actions, GitLab CI, ecc.) | Pipeline di test, build, dockerizzazione e deploy |
-
-Nel repository esiste solo la cartella `.github/`, ma senza visibilità sul contenuto non posso elencare job o workflow specifici.
-
----
-
-## 9. Testing Framework
-
-| Tecnologia | Ruolo |
-|------------|-------|
-| **Jest** | Testing unitario e di integrazione per backend e logica condivisa |
-| **Supertest** (se Express) / **light-my-request** (se Fastify) | Test di integrazione sugli endpoint HTTP |
-| **React Testing Library** | Test dei componenti React in modo user‑centric |
-| **Playwright / Cypress** (opzionale) | End‑to‑end testing (flussi UI completi: caricamento documenti, avvio job, download risultati) |
-
-Ancora, non essendo presenti file `package.json` o configurazioni di test non posso confermare strumenti specifici: quanto sopra è coerente con lo stack descritto nell’architettura.
+  @@unique([userId, date])
+  @@unique([deskId, date])
+}
+```
 
 ---
 
-## 10. Dependency Update Strategy
+## 5. Dev Tools
 
-Poiché il repository non contiene strumenti automatizzati visibili (es. config Renovate/Dependabot) né documentazione specifica, la seguente strategia è **raccomandata** in coerenza con l’architettura:
-
-- **Cadenza aggiornamenti:**
-  - Verifica trimestrale delle versioni principali (Node, React, ORM, librerie core).
-  - Aggiornamenti **mensili** per patch e minor version non breaking (semver).
-- **Sicurezza:**
-  - Abilitare strumenti automatici tipo **Dependabot** (GitHub) o **Renovate** per:
-    - segnalare vulnerabilità note (advisories npm);
-    - proporre PR automatiche con bump di versione.
-  - Integrare nella pipeline CI uno scanner di vulnerabilità (es. `npm audit`, Snyk, Trivy per immagini Docker).
-- **Policy:**
-  - Nessun deploy in produzione con vulnerabilità di severità **HIGH/CRITICAL** non gestite.
-  - Migrazioni del DB versionate e testate sempre in ambiente di staging prima del roll‑out in produzione.
-- **Compatibilità:**
-  - Mantenere backend su **Node LTS**.
-  - Restare entro le versioni supportate di librerie critiche (React, ORM, JWT, bcrypt).
+| Tool | Ruolo |
+|------|-------|
+| ESLint | Linting |
+| Prettier | Formatting |
+| Jest | Testing |
+| GitHub Actions | CI/CD |
 
 ---
 
-### Limiti dell’analisi attuale
+## 6. Hosting (Raccomandato)
 
-- Il repository condiviso non contiene file di codice né manifest di dipendenze; quanto sopra è quindi basato sulla **Generated Architecture** fornita.
-- Per avere un inventario 100% accurato del tech stack reale sarà necessario:
-  - aggiungere al repository il codice applicativo o
-  - condividere almeno file come `package.json`, `tsconfig.json`, `Dockerfile`, configurazioni CI/CD e migrazioni DB.
+| Servizio | Uso |
+|----------|-----|
+| Vercel / Netlify | Frontend PWA |
+| Railway / Render | Backend API |
+| Supabase / Neon | PostgreSQL managed |
 
-Se vuoi, al prossimo passo posso:
+---
 
-- proporti un **esempio di `package.json`** (backend e frontend) coerente con questa architettura;  
-- oppure dettagliare uno **stack minimo raccomandato** (con nomi/versions esatti) da adottare nel tuo progetto demo.
+## 7. Dipendenze Minime
+
+### Frontend (package.json)
+```json
+{
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0",
+    "tailwindcss": "^3.4.0"
+  }
+}
+```
+
+### Backend (package.json)
+```json
+{
+  "dependencies": {
+    "express": "^4.18.0",
+    "@prisma/client": "^5.7.0",
+    "jsonwebtoken": "^9.0.0",
+    "bcrypt": "^5.1.0",
+    "zod": "^3.22.0",
+    "cors": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.0",
+    "@types/bcrypt": "^5.0.0",
+    "typescript": "^5.3.0",
+    "prisma": "^5.7.0"
+  }
+}
+```
